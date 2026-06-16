@@ -40,7 +40,7 @@ SHADOWSCHEMA_IMAGE=shadowschema:local SHADOWSCHEMA_DASHBOARD_IMAGE=shadowschema-
 - **SDK generation:** Tests that call `npx` should skip gracefully when the tool or network is unavailable (`t.Skip`).
 - **Before a release:** Update `CHANGELOG.md`, bump the version in `dashboard/index.html`, and tag with `v*.*.*` to trigger the GitHub release workflow.
 - **Docker images:** `.github/workflows/docker.yml` builds and publishes proxy + dashboard images to GHCR on every push to `main` or `dev` (and on version tags). `dev` gets `:beta` and `:dev`; `main` gets `:latest`.
-- **preview preview:** On the server, run `docker compose pull && docker compose up -d` in the preview stack directory after a `dev` push.
+- **preview preview:** Stack lives at `/opt/stacks/shadowschema_preview` on `notfixingit`. Sync `deploy/preview/` (compose, nginx configs, `.env.example` — not the git repo), ensure `.env` exists with `POSTGRES_PASSWORD`, then `docker compose pull && docker compose up -d`. Requires `postgres`, `proxy`, `dashboard`, and `nginx` services; proxy needs `DATABASE_URL` (set automatically by compose).
 
 ### Code of Conduct
 

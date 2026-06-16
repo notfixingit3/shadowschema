@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- preview deployment docs: Postgres stack layout, first-time setup, migration note from SQLite volumes.
+
 ## [1.1.0-beta.7] - 2026-06-16
 
 ### Fixed

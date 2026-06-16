@@ -94,15 +94,42 @@ docker cp shadowschema-proxy:/app/certs/ca.crt ./ca.crt
 
 ### Option 2: preview Preview (Traefik)
 
-For hosting behind Traefik on the `preview.me` network, see `deploy/preview/`. Copy `.env.example` to `.env` to pin image tags.
+For hosting behind Traefik on the `preview.me` network, use `deploy/preview/`. The stack runs:
+
+| Service | Role |
+|---------|------|
+| `postgres` | Session + spec persistence |
+| `proxy` | MITM on `:38080`, export API on `:38081` |
+| `dashboard` | Static UI (nginx, internal `:8080`) |
+| `nginx` | Same-origin front for Traefik (`preview.example.internal`) |
+
+**First-time setup:**
 
 ```bash
 cd deploy/preview
+cp .env.example .env
+# Set POSTGRES_PASSWORD in .env before going live
 docker compose pull
 docker compose up -d
 ```
 
+**Updates** (after a `dev` push or new tag):
+
+```bash
+cd /opt/stacks/shadowschema_preview   # or your checkout's deploy/preview
+docker compose pull && docker compose up -d
+```
+
+Pin a known-good release in `.env`:
+
+```
+SHADOWSCHEMA_IMAGE=ghcr.io/notfixingit3/shadowschema:v1.1.0-beta.7
+SHADOWSCHEMA_DASHBOARD_IMAGE=ghcr.io/notfixingit3/shadowschema-dashboard:v1.1.0-beta.7
+```
+
 Live preview: https://preview.example.internal
+
+> **Migrating from pre-beta.6:** Older stacks used a `shadowschema-data` SQLite volume. Beta.6+ requires Postgres — the first deploy creates a fresh database. CA certs in `shadowschema-certs` are preserved.
 
 ### Option 3: Build from Source (Contributors)
 
