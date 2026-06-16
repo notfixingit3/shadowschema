@@ -15,6 +15,8 @@ const elMethod = document.getElementById('endpoint-method');
 const elPath = document.getElementById('endpoint-path');
 const elParams = document.getElementById('endpoint-params');
 const elResponse = document.getElementById('endpoint-response');
+const elRaw = document.getElementById('endpoint-raw');
+const copyPythonBtn = document.getElementById('copy-python-btn');
 const exportBtn = document.getElementById('export-json-btn');
 
 // Session elements
@@ -275,6 +277,44 @@ exportBtn.addEventListener('click', () => {
   dlAnchorElem.setAttribute("download", `shadowschema_${currentSessionId}.json`);
   dlAnchorElem.click();
 });
+
+// Copy Python Script logic
+if (copyPythonBtn) {
+  copyPythonBtn.addEventListener('click', () => {
+    if (!selectedPath || !selectedMethod || !currentSpec) return;
+
+    const operation = currentSpec.paths[selectedPath][selectedMethod.toLowerCase()];
+    
+    // Get the base URL from the spec servers if available, or just use a placeholder
+    let baseUrl = currentSpec.servers && currentSpec.servers.length > 0 ? currentSpec.servers[0].url : "https://target-domain.com";
+    if (baseUrl === "/") {
+      baseUrl = "https://" + currentSpec.info.title; // fallback
+    }
+    
+    let url = baseUrl + selectedPath;
+    let headers = {
+      "User-Agent": "ShadowSchema-Replay/1.0"
+    };
+
+    let pythonScript = `import requests\nimport json\n\nurl = "${url}"\n\nheaders = ${JSON.stringify(headers, null, 4)}\n\n`;
+
+    let payloadKwarg = "";
+    if (['POST', 'PUT', 'PATCH'].includes(selectedMethod) && operation['x-last-payload']) {
+      pythonScript += `payload = ${JSON.stringify(operation['x-last-payload'], null, 4)}\n\n`;
+      payloadKwarg = ", json=payload";
+    }
+
+    pythonScript += `response = requests.request("${selectedMethod}", url, headers=headers${payloadKwarg})\n\nprint(f"Status: {response.status_code}")\nprint(response.text)\n`;
+
+    navigator.clipboard.writeText(pythonScript).then(() => {
+      const originalText = copyPythonBtn.textContent;
+      copyPythonBtn.textContent = "✅ Copied!";
+      setTimeout(() => {
+        copyPythonBtn.textContent = originalText;
+      }, 2000);
+    });
+  });
+}
 
 // Event Listeners
 sessionSelect.addEventListener('change', (e) => {
