@@ -12,6 +12,7 @@ const elMethod = document.getElementById('endpoint-method');
 const elPath = document.getElementById('endpoint-path');
 const elParams = document.getElementById('endpoint-params');
 const elResponse = document.getElementById('endpoint-response');
+const exportBtn = document.getElementById('export-json-btn');
 
 // Session elements
 const sessionSelect = document.getElementById('session-select');
@@ -33,7 +34,6 @@ async function fetchSessions() {
     if (!res.ok) return;
     const sessions = await res.json();
     
-    // Check if session list changed
     const currentOptions = Array.from(sessionSelect.options).map(o => o.value);
     const newOptions = sessions.map(s => s.id.toString());
     
@@ -42,7 +42,7 @@ async function fetchSessions() {
       sessions.forEach(s => {
         const opt = document.createElement('option');
         opt.value = s.id;
-        opt.textContent = `${s.name} (${s.target})`;
+        opt.textContent = `Target: ${s.target} — ${s.name}`;
         sessionSelect.appendChild(opt);
       });
       if (sessions.length > 0 && !currentSessionId) {
@@ -65,7 +65,7 @@ async function switchSession(id) {
       body: JSON.stringify({id: parseInt(id)})
     });
     currentSessionId = id;
-    currentSpec = null; // force reload
+    currentSpec = null;
     fetchSpec();
   } catch (err) {
     console.error(err);
@@ -80,8 +80,9 @@ async function fetchSpec() {
     if (!res.ok) throw new Error('Network response was not ok');
     const data = await res.json();
     
-    statusText.textContent = 'Connected & Listening';
+    statusText.textContent = 'Listening (Secure)';
     pulse.classList.remove('error');
+    exportBtn.disabled = false;
     
     if (JSON.stringify(data) !== JSON.stringify(currentSpec)) {
       currentSpec = data;
@@ -91,8 +92,9 @@ async function fetchSpec() {
       }
     }
   } catch (err) {
-    statusText.textContent = 'Disconnected';
+    statusText.textContent = 'Proxy Offline';
     pulse.classList.add('error');
+    exportBtn.disabled = true;
   }
 }
 
@@ -126,11 +128,35 @@ function renderSidebar() {
   });
 }
 
+function syntaxHighlight(json) {
+  if (typeof json != 'string') {
+    json = JSON.stringify(json, undefined, 2);
+  }
+  json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
+    let color = '#a5b4fc'; // default
+    if (/^"/.test(match)) {
+      if (/:$/.test(match)) {
+        color = '#38bdf8'; // keys
+      } else {
+        color = '#a78bfa'; // strings
+      }
+    } else if (/true|false/.test(match)) {
+      color = '#34d399'; // booleans
+    } else if (/null/.test(match)) {
+      color = '#f87171'; // null
+    } else {
+      color = '#fbbf24'; // numbers
+    }
+    return '<span style="color:' + color + '">' + match + '</span>';
+  });
+}
+
 function renderDetails(path, method) {
   welcomeState.classList.add('hidden');
   endpointDetails.classList.remove('hidden');
   
-  elMethod.className = `method-badge badge-${method}`;
+  elMethod.className = `method-badge large badge-${method}`;
   elMethod.textContent = method;
   elPath.textContent = path;
   
@@ -145,23 +171,33 @@ function renderDetails(path, method) {
       
       row.innerHTML = `
         <div class="param-name">${p.name}</div>
-        <div class="param-in">[${p.in}]</div>
+        <div class="param-in">${p.in}</div>
         <div class="param-type">${schemaType}</div>
       `;
       elParams.appendChild(row);
     });
   } else {
-    elParams.innerHTML = '<div style="color: var(--text-muted)">No parameters detected.</div>';
+    elParams.innerHTML = '<div style="color: var(--text-muted); font-size: 0.9rem; padding: 1rem;">No parameters detected.</div>';
   }
   
   const response = operation.responses['200'];
   if (response && response.content && response.content['application/json']) {
     const schema = response.content['application/json'].schema;
-    elResponse.textContent = JSON.stringify(schema, null, 2);
+    elResponse.innerHTML = syntaxHighlight(schema);
   } else {
-    elResponse.textContent = '// No JSON response mapped yet';
+    elResponse.innerHTML = '<span style="color: #64748b;">// No JSON response payload intercepted yet.</span>';
   }
 }
+
+// Export logic
+exportBtn.addEventListener('click', () => {
+  if (!currentSpec) return;
+  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(currentSpec, null, 2));
+  const dlAnchorElem = document.createElement('a');
+  dlAnchorElem.setAttribute("href", dataStr);
+  dlAnchorElem.setAttribute("download", `shadowschema_${currentSessionId}.json`);
+  dlAnchorElem.click();
+});
 
 // Event Listeners
 sessionSelect.addEventListener('change', (e) => {
@@ -196,7 +232,7 @@ btnCreate.addEventListener('click', async () => {
     currentSpec = null;
     welcomeState.classList.remove('hidden');
     endpointDetails.classList.add('hidden');
-    await fetchSpec(); // Will reload and fetch new session list
+    await fetchSpec();
   } catch(err) {
     console.error(err);
   }

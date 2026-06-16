@@ -3,77 +3,136 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ShadowSchema Live Map</title>
+    <title>ShadowSchema Live Recon</title>
     <link rel="icon" type="image/jpeg" href="/favicon.jpg">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="./style.css">
   </head>
   <body>
     <div class="background-effects">
+      <div class="grid-overlay"></div>
       <div class="glow-orb orb-1"></div>
       <div class="glow-orb orb-2"></div>
     </div>
     
     <div class="app-container">
-      <header class="header glass">
-        <div class="logo">
-          <span class="neon-text">SHADOW</span>SCHEMA
+      <header class="header glass-panel">
+        <div class="brand">
+          <img src="/favicon.jpg" alt="ShadowSchema Logo" class="brand-logo" />
+          <div class="brand-text">
+            <span class="neon-text">SHADOW</span>SCHEMA
+            <span class="brand-subtitle">Reconnaissance Framework</span>
+          </div>
         </div>
         
-        <div class="session-controls">
-          <select id="session-select" class="glass-input"></select>
-          <button id="new-session-btn" class="glass-btn">New Target</button>
-        </div>
+        <div class="header-right">
+          <div class="session-controls">
+            <div class="tooltip-container">
+              <select id="session-select" class="glass-input"></select>
+              <span class="tooltip">Switch active reconnaissance session</span>
+            </div>
+            <div class="tooltip-container">
+              <button id="new-session-btn" class="glass-btn primary">+ New Target</button>
+              <span class="tooltip">Deploy a new MITM filter</span>
+            </div>
+          </div>
 
-        <div class="status-indicator">
-          <div class="pulse"></div>
-          <span id="connection-status">Connecting...</span>
+          <div class="status-indicator">
+            <div class="pulse"></div>
+            <span id="connection-status">Connecting...</span>
+          </div>
         </div>
       </header>
 
       <main class="dashboard">
-        <aside class="sidebar glass">
-          <h2>Endpoints</h2>
-          <ul id="endpoint-list" class="endpoint-list">
-            <!-- Populated by JS -->
-          </ul>
+        <aside class="sidebar glass-panel">
+          <div class="sidebar-header">
+            <h2>Intercepted Endpoints</h2>
+            <div class="tooltip-container">
+              <button id="export-json-btn" class="glass-btn small" disabled>⬇ Export JSON</button>
+              <span class="tooltip">Download current OpenAPI spec</span>
+            </div>
+          </div>
+          <div class="sidebar-scroll">
+            <ul id="endpoint-list" class="endpoint-list">
+              <!-- Populated by JS -->
+            </ul>
+          </div>
         </aside>
 
-        <section class="content glass">
+        <section class="content glass-panel">
           <div id="welcome-state" class="welcome-state">
+            <img src="/favicon.jpg" alt="Logo" class="watermark-logo" />
             <h1>Awaiting Telemetry</h1>
-            <p>Select an endpoint from the sidebar to inspect its auto-generated schema footprint.</p>
+            <p>Route your traffic through <code>localhost:38080</code> and select an endpoint from the sidebar to inspect its auto-generated footprint.</p>
           </div>
           
           <div id="endpoint-details" class="endpoint-details hidden">
             <div class="endpoint-header">
-              <span id="endpoint-method" class="method-badge"></span>
-              <h2 id="endpoint-path"></h2>
+              <div class="title-group">
+                <span id="endpoint-method" class="method-badge large"></span>
+                <h2 id="endpoint-path"></h2>
+              </div>
             </div>
             
-            <div class="schema-section">
-              <h3>Parameters</h3>
-              <div id="endpoint-params" class="params-container"></div>
-            </div>
+            <div class="schema-layout">
+              <div class="schema-section params-section">
+                <div class="section-header">
+                  <h3>Parameters & Headers</h3>
+                  <span class="badge">Inferred</span>
+                </div>
+                <div id="endpoint-params" class="params-container"></div>
+              </div>
 
-            <div class="schema-section">
-              <h3>Response Payload</h3>
-              <pre id="endpoint-response"></pre>
+              <div class="schema-section response-section">
+                <div class="section-header">
+                  <h3>Response Payload Schema</h3>
+                  <span class="badge">Application/JSON</span>
+                </div>
+                <div class="code-window">
+                  <div class="window-header">
+                    <span class="dot red"></span>
+                    <span class="dot yellow"></span>
+                    <span class="dot green"></span>
+                  </div>
+                  <pre id="endpoint-response"></pre>
+                </div>
+              </div>
             </div>
           </div>
         </section>
       </main>
+
+      <footer class="footer glass-panel">
+        <div class="footer-content">
+          <span>&copy; 2026 ShadowSchema Network. For authorized research only.</span>
+          <div class="footer-links">
+            <a href="#" class="footer-link">Documentation</a>
+            <a href="#" class="footer-link">API Reference</a>
+            <a href="#" class="footer-link">v0.0.1-beta.1</a>
+          </div>
+        </div>
+      </footer>
     </div>
 
     <!-- Modal -->
     <div id="new-session-modal" class="modal hidden">
-      <div class="modal-content glass">
-        <h3>Deploy New Interceptor</h3>
-        <input type="text" id="ns-name" class="glass-input" placeholder="Session Name (e.g. Staging Mapping)">
-        <input type="text" id="ns-target" class="glass-input" placeholder="Target Domain (e.g. staging.example.com)">
+      <div class="modal-content glass-panel">
+        <div class="modal-header">
+          <h3>Deploy New Interceptor</h3>
+          <p>Configure the proxy filter to lock onto a new target perimeter.</p>
+        </div>
+        <div class="input-group">
+          <label>Session Reference</label>
+          <input type="text" id="ns-name" class="glass-input" placeholder="e.g. Production Mobile App">
+        </div>
+        <div class="input-group">
+          <label>Target Domain Perimeter</label>
+          <input type="text" id="ns-target" class="glass-input" placeholder="e.g. api.target.com">
+        </div>
         <div class="modal-actions">
           <button id="ns-cancel" class="glass-btn secondary">Abort</button>
-          <button id="ns-create" class="glass-btn primary">Deploy</button>
+          <button id="ns-create" class="glass-btn primary">Initialize Recon</button>
         </div>
       </div>
     </div>
