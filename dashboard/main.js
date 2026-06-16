@@ -51,7 +51,7 @@ const statTargets = document.getElementById('stat-targets');
 const searchInput = document.getElementById('endpoint-search');
 const tabSchema = document.getElementById('tab-schema');
 const tabRaw = document.getElementById('tab-raw');
-const elRaw = document.getElementById('endpoint-raw');
+
 
 // Tab logic
 tabSchema.addEventListener('click', () => {
