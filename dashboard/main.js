@@ -38,6 +38,12 @@ const adminModal = document.getElementById('manage-sessions-modal');
 const adminClose = document.getElementById('ms-close');
 const adminList = document.getElementById('session-admin-list');
 
+// Vault elements
+const vaultBtn = document.getElementById('vault-btn');
+const vaultModal = document.getElementById('vault-modal');
+const vaultClose = document.getElementById('vault-close');
+const vaultList = document.getElementById('vault-list');
+
 // Discovered Domains
 const viewDomainsBtn = document.getElementById('view-domains-btn');
 const discoveredModal = document.getElementById('discovered-domains-modal');
@@ -84,6 +90,41 @@ searchInput.addEventListener('input', (e) => {
     }
   });
 });
+
+// Vault logic
+if (vaultBtn && vaultModal && vaultClose && vaultList) {
+  vaultBtn.addEventListener('click', () => {
+    vaultModal.classList.remove('hidden');
+    vaultList.innerHTML = '<tr><td colspan="3" style="text-align:center; padding: 1rem;">Loading...</td></tr>';
+    
+    fetch('http://localhost:38081/vault')
+      .then(res => res.json())
+      .then(creds => {
+        vaultList.innerHTML = '';
+        if (!creds || creds.length === 0) {
+          vaultList.innerHTML = '<tr><td colspan="3" style="text-align:center; padding: 1rem;">No credentials captured yet.</td></tr>';
+          return;
+        }
+        creds.forEach(c => {
+          const tr = document.createElement('tr');
+          tr.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
+          tr.innerHTML = `
+            <td style="padding: 0.75rem 0.5rem; font-family: var(--font-mono); color: var(--accent-cyan);">${c.header_name}</td>
+            <td style="padding: 0.75rem 0.5rem; font-family: var(--font-mono); word-break: break-all;">${c.token_value}</td>
+            <td style="padding: 0.75rem 0.5rem; font-size: 0.85rem; color: var(--text-muted);">${new Date(c.first_seen).toLocaleString()}</td>
+          `;
+          vaultList.appendChild(tr);
+        });
+      })
+      .catch(err => {
+        vaultList.innerHTML = `<tr><td colspan="3" style="text-align:center; padding: 1rem; color: red;">Error: ${err}</td></tr>`;
+      });
+  });
+
+  vaultClose.addEventListener('click', () => {
+    vaultModal.classList.add('hidden');
+  });
+}
 
 let currentSpec = null;
 let selectedPath = null;

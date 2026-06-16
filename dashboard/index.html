@@ -37,6 +37,10 @@
               <span class="tooltip">Switch active reconnaissance session</span>
             </div>
             <div class="tooltip-container tooltip-bottom">
+              <button id="vault-btn" class="glass-btn small" style="background: rgba(138, 43, 226, 0.2); border-color: var(--accent-purple);">🔑 Vault</button>
+              <span class="tooltip">View captured auth credentials</span>
+            </div>
+            <div class="tooltip-container tooltip-bottom">
               <button id="manage-sessions-btn" class="glass-btn small">Manage</button>
               <span class="tooltip">Manage saved sessions</span>
             </div>
@@ -162,6 +166,33 @@
           </div>
         </div>
       </footer>
+    </div>
+
+    <!-- Vault Modal -->
+    <div id="vault-modal" class="modal hidden">
+      <div class="modal-content glass-panel" style="max-width: 600px;">
+        <div class="modal-header">
+          <h3>🔑 Auth Vault</h3>
+          <p>Tokens and API keys automatically captured from intercepted traffic.</p>
+        </div>
+        <div class="modal-body" style="max-height: 400px; overflow-y: auto;">
+          <table style="width: 100%; text-align: left; border-collapse: collapse;">
+            <thead>
+              <tr style="border-bottom: 1px solid var(--glass-border);">
+                <th style="padding: 0.5rem; color: var(--text-muted);">Header</th>
+                <th style="padding: 0.5rem; color: var(--text-muted);">Token Value</th>
+                <th style="padding: 0.5rem; color: var(--text-muted);">First Seen</th>
+              </tr>
+            </thead>
+            <tbody id="vault-list">
+              <!-- Populated via JS -->
+            </tbody>
+          </table>
+        </div>
+        <div class="modal-actions">
+          <button id="vault-close" class="glass-btn">Close</button>
+        </div>
+      </div>
     </div>
 
     <!-- Modal -->

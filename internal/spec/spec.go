@@ -41,6 +41,12 @@ type SessionMeta struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
+type AuthCredential struct {
+	HeaderName string    `json:"header_name"`
+	TokenValue string    `json:"token_value"`
+	FirstSeen  time.Time `json:"first_seen"`
+}
+
 func NewSpecManager(defaultTarget string) *SpecManager {
 	db, err := sql.Open("sqlite3", "./shadowschema.db")
 	if err != nil {
@@ -61,6 +67,17 @@ func NewSpecManager(defaultTarget string) *SpecManager {
 
 	// Safely add ignore_rules if updating existing db
 	_, _ = db.Exec(`ALTER TABLE sessions ADD COLUMN ignore_rules TEXT DEFAULT ''`)
+
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS auth_vault (
+		session_id INTEGER,
+		header_name TEXT,
+		token_value TEXT,
+		first_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
+		UNIQUE(session_id, header_name, token_value)
+	)`)
+	if err != nil {
+		log.Printf("Failed to create auth_vault table: %v", err)
+	}
 
 	sm := &SpecManager{db: db, Discovered: make(map[string]bool)}
 	sm.LoadLatestOrCreate(defaultTarget)
@@ -109,6 +126,12 @@ func (s *SpecManager) GetTarget() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.TargetDomain
+}
+
+func (s *SpecManager) SaveVaultCredential(headerName, tokenValue string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, _ = s.db.Exec(`INSERT OR IGNORE INTO auth_vault (session_id, header_name, token_value) VALUES (?, ?, ?)`, s.SessionID, headerName, tokenValue)
 }
 
 func (s *SpecManager) IsTarget(host string) bool {
@@ -415,6 +438,37 @@ func (s *SpecManager) StartExportServer(port string) {
 		
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(keys)
+	})
+
+	mux.HandleFunc("/vault", func(w http.ResponseWriter, r *http.Request) {
+		enableCORS(w)
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if r.Method == "GET" {
+			s.mu.Lock()
+			rows, err := s.db.Query(`SELECT header_name, token_value, first_seen FROM auth_vault WHERE session_id = ? ORDER BY first_seen DESC`, s.SessionID)
+			s.mu.Unlock()
+
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			defer rows.Close()
+
+			var credentials []AuthCredential
+			for rows.Next() {
+				var ac AuthCredential
+				if err := rows.Scan(&ac.HeaderName, &ac.TokenValue, &ac.FirstSeen); err == nil {
+					credentials = append(credentials, ac)
+				}
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(credentials)
+			return
+		}
 	})
 
 	mux.HandleFunc("/sessions/add-target", func(w http.ResponseWriter, r *http.Request) {
