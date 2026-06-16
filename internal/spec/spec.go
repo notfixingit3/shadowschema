@@ -212,6 +212,9 @@ func (s *SpecManager) StartExportServer(port string) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 		w.Write(data)
 		fmt.Println("[INFO] Exported OpenAPI spec via /export-map")
 	})

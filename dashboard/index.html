@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ShadowSchema Live Map</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./style.css">
+  </head>
+  <body>
+    <div class="background-effects">
+      <div class="glow-orb orb-1"></div>
+      <div class="glow-orb orb-2"></div>
+    </div>
+    
+    <div class="app-container">
+      <header class="header glass">
+        <div class="logo">
+          <span class="neon-text">SHADOW</span>SCHEMA
+        </div>
+        <div class="status-indicator">
+          <div class="pulse"></div>
+          <span id="connection-status">Connecting...</span>
+        </div>
+      </header>
+
+      <main class="dashboard">
+        <aside class="sidebar glass">
+          <h2>Endpoints</h2>
+          <ul id="endpoint-list" class="endpoint-list">
+            <!-- Populated by JS -->
+          </ul>
+        </aside>
+
+        <section class="content glass">
+          <div id="welcome-state" class="welcome-state">
+            <h1>Awaiting Telemetry</h1>
+            <p>Select an endpoint from the sidebar to inspect its auto-generated schema footprint.</p>
+          </div>
+          
+          <div id="endpoint-details" class="endpoint-details hidden">
+            <div class="endpoint-header">
+              <span id="endpoint-method" class="method-badge"></span>
+              <h2 id="endpoint-path"></h2>
+            </div>
+            
+            <div class="schema-section">
+              <h3>Parameters</h3>
+              <div id="endpoint-params" class="params-container"></div>
+            </div>
+
+            <div class="schema-section">
+              <h3>Response Payload</h3>
+              <pre id="endpoint-response"></pre>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
