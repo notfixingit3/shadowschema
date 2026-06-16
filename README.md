@@ -84,7 +84,26 @@ export https_proxy=http://127.0.0.1:38080
 curl -k https://example.com/api/v1/users
 ```
 
-### 🔑 Trust Provisioning
+### 3. Intercepting a Browser (Firefox Developer Edition)
+Firefox Developer Edition is excellent for API recon because it has its own independent certificate store and proxy settings, keeping your daily browsing unaffected.
+
+**Configure the Proxy:**
+1. Open Firefox Developer Edition and go to **Settings** -> **General** -> **Network Settings** (at the very bottom).
+2. Select **Manual proxy configuration**.
+3. Set **HTTP Proxy** to `127.0.0.1` and **Port** to `38080`.
+4. Check **Also use this proxy for HTTPS**.
+5. Click **OK**.
+
+**Trust the ShadowSchema CA:**
+1. In Settings, go to **Privacy & Security**.
+2. Scroll down to the **Certificates** section and click **View Certificates...**.
+3. Go to the **Authorities** tab and click **Import...**.
+4. Select the `certs/ca.crt` file generated in your ShadowSchema directory.
+5. Check **Trust this CA to identify websites** and click **OK**.
+
+Now, traffic from Firefox Developer Edition will seamlessly route through ShadowSchema!
+
+### 🔑 Trust Provisioning (System-Wide)
 
 Upon initial launch, ShadowSchema will forge a fresh RSA keypair and self-signed Certificate Authority within the `certs/` directory. 
 To achieve seamless HTTPS interception without triggering `ERR_CERT_AUTHORITY_INVALID` anomalies:
