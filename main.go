@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -86,6 +87,12 @@ func main() {
 				if val := r.Header.Get(h); val != "" {
 					specManager.SaveVaultCredential(h, val)
 				}
+			}
+
+			if strings.ToLower(r.Header.Get("Upgrade")) == "websocket" {
+				specManager.AddWebSocket(r.URL.Path)
+				fmt.Printf("[WS]   %-6s %s\n", r.Method, r.URL.Path)
+				return r, nil
 			}
 
 			// Clean terminal output - Method and Path, aligned

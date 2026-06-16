@@ -233,8 +233,10 @@ function renderSidebar() {
         li.classList.add('active');
       }
       
+      let displayMethod = method.toUpperCase() === 'TRACE' ? 'WS' : method.toUpperCase();
+      
       li.innerHTML = `
-        <span class="method-badge badge-${method.toUpperCase()}">${method.toUpperCase()}</span>
+        <span class="method-badge badge-${displayMethod}">${displayMethod}</span>
         <span class="endpoint-path-label">${path}</span>
       `;
       
@@ -279,8 +281,9 @@ function renderDetails(path, method) {
   welcomeState.classList.add('hidden');
   endpointDetails.classList.remove('hidden');
   
-  elMethod.className = `method-badge large badge-${method}`;
-  elMethod.textContent = method;
+  let displayMethod = method.toUpperCase() === 'TRACE' ? 'WS' : method.toUpperCase();
+  elMethod.className = `method-badge large badge-${displayMethod}`;
+  elMethod.textContent = displayMethod;
   elPath.textContent = path;
   
   const operation = currentSpec.paths[path][method.toLowerCase()];

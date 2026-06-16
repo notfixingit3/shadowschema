@@ -169,6 +169,30 @@ func (s *SpecManager) saveState() {
 	}
 }
 
+func (s *SpecManager) AddWebSocket(path string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.IgnoreRules != "" {
+		if matched, _ := regexp.MatchString(s.IgnoreRules, path); matched {
+			return
+		}
+	}
+
+	pathItem := s.doc.Paths.Find(path)
+	if pathItem == nil {
+		pathItem = &openapi3.PathItem{}
+		s.doc.Paths.Set(path, pathItem)
+	}
+
+	if pathItem.Trace == nil {
+		pathItem.Trace = openapi3.NewOperation()
+		pathItem.Trace.Summary = "WebSocket Connection"
+		pathItem.Trace.Description = "Detected WebSocket upgrade on this endpoint."
+	}
+	s.saveState()
+}
+
 func (s *SpecManager) AddEndpoint(req *http.Request, path string, body []byte) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
