@@ -37,6 +37,10 @@
               <span class="tooltip">Switch active reconnaissance session</span>
             </div>
             <div class="tooltip-container tooltip-bottom">
+              <button id="download-ca-btn" class="glass-btn small" style="background: rgba(0, 240, 255, 0.1); border-color: var(--accent-cyan);">🔒 CA Cert</button>
+              <span class="tooltip">Download MITM root CA for browser trust</span>
+            </div>
+            <div class="tooltip-container tooltip-bottom">
               <button id="vault-btn" class="glass-btn small" style="background: rgba(138, 43, 226, 0.2); border-color: var(--accent-purple);">🔑 Vault</button>
               <span class="tooltip">View captured auth credentials</span>
             </div>
@@ -115,7 +119,7 @@
             <div id="welcome-state" class="welcome-state">
             <img src="/favicon.jpg" alt="Logo" class="watermark-logo" />
             <h1>Awaiting Telemetry</h1>
-            <p>Route your traffic through <code id="proxy-hint">localhost:38080</code> and select an endpoint from the sidebar to inspect its auto-generated footprint.</p>
+            <p>Route your traffic through <code id="proxy-hint">localhost:38080</code>, install the <strong>CA Cert</strong> in your browser, then select an endpoint from the sidebar to inspect its auto-generated footprint.</p>
           </div>
           
           <div id="endpoint-details" class="endpoint-details hidden">
@@ -164,7 +168,7 @@
             <a href="https://github.com/notfixingit3/shadowschema" target="_blank" rel="noopener" class="footer-link">GitHub</a>
             <a href="https://github.com/notfixingit3/shadowschema/issues" target="_blank" rel="noopener" class="footer-link">Report Issue</a>
             <a href="https://github.com/sponsors/notfixingit3" target="_blank" rel="noopener" class="footer-link sponsor-link">💖 Sponsor</a>
-            <span class="footer-version">v1.1.0-beta.7</span>
+            <span class="footer-version">v1.1.0-beta.8</span>
           </div>
         </div>
       </footer>

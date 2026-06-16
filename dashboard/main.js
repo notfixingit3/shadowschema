@@ -49,6 +49,20 @@ const adminModal = document.getElementById('manage-sessions-modal');
 const adminClose = document.getElementById('ms-close');
 const adminList = document.getElementById('session-admin-list');
 
+// CA cert download
+const downloadCABtn = document.getElementById('download-ca-btn');
+if (downloadCABtn) {
+  downloadCABtn.addEventListener('click', () => {
+    const link = document.createElement('a');
+    link.href = `${API_URL}/ca-cert`;
+    link.download = 'shadowschema-ca.crt';
+    link.rel = 'noopener';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  });
+}
+
 // Vault elements
 const vaultBtn = document.getElementById('vault-btn');
 const vaultModal = document.getElementById('vault-modal');

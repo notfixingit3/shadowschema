@@ -86,7 +86,13 @@ To update after a new release:
 docker compose pull && docker compose up -d
 ```
 
-To copy the CA cert out of a running container:
+Download the MITM root CA from the dashboard (**🔒 CA Cert** in the header) or via the export API:
+
+```bash
+curl -fsS http://localhost:38081/ca-cert -o shadowschema-ca.crt
+```
+
+From a running container:
 
 ```bash
 docker cp shadowschema-proxy:/app/certs/ca.crt ./ca.crt
@@ -225,6 +231,7 @@ The background export server on `:38081` powers the dashboard and CLI tooling:
 | `/sessions/delete` | POST | Delete a session |
 | `/sessions/add-target` | POST | Append a domain to the active target list |
 | `/generate-sdk` | POST | Generate a Python, TypeScript, Go, or Rust SDK zip |
+| `/ca-cert` | GET | Download the MITM root CA (`shadowschema-ca.crt`) |
 
 ## 🧪 Testing
 

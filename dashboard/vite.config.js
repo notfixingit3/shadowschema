@@ -11,6 +11,7 @@ export default defineConfig({
       clientPort: 443,
     },
     proxy: {
+      '/ca-cert': 'http://127.0.0.1:38081',
       '/export-map': 'http://127.0.0.1:38081',
       '/vault': 'http://127.0.0.1:38081',
       '/discovered': 'http://127.0.0.1:38081',

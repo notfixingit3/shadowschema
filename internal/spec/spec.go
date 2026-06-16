@@ -374,6 +374,8 @@ func (s *SpecManager) StartExportServer(port string) {
 }
 
 func (s *SpecManager) mountExportRoutes(mux *http.ServeMux) {
+	s.mountCACertRoute(mux)
+
 	mux.HandleFunc("/export-map", func(w http.ResponseWriter, r *http.Request) {
 		enableCORS(w)
 		if r.Method == "OPTIONS" {

@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.1.0-beta.8] - 2026-06-16
+
+### Added
+- **CA cert download:** Dashboard **🔒 CA Cert** button and `GET /ca-cert` export API endpoint serve `shadowschema-ca.crt` for browser trust setup.
+
 ### Changed
 - preview deployment docs: Postgres stack layout, first-time setup, migration note from SQLite volumes.
 
