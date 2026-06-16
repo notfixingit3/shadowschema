@@ -40,6 +40,7 @@ const ddClose = document.getElementById('dd-close');
 const discoveredList = document.getElementById('discovered-admin-list');
 
 // Metric Elements
+const statRoutes = document.getElementById('stat-routes');
 const statEndpoints = document.getElementById('stat-endpoints');
 const statDomains = document.getElementById('stat-domains');
 const statTargets = document.getElementById('stat-targets');
@@ -165,8 +166,11 @@ function renderSidebar() {
   
   if (!currentSpec || !currentSpec.paths) {
     statEndpoints.textContent = "0";
+    statRoutes.textContent = "0";
     return;
   }
+
+  statRoutes.textContent = Object.keys(currentSpec.paths).length;
 
   Object.entries(currentSpec.paths).forEach(([path, methods]) => {
     Object.keys(methods).forEach(method => {
