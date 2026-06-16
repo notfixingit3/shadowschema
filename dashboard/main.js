@@ -33,6 +33,17 @@ const adminModal = document.getElementById('manage-sessions-modal');
 const adminClose = document.getElementById('ms-close');
 const adminList = document.getElementById('session-admin-list');
 
+// Discovered Domains
+const viewDomainsBtn = document.getElementById('view-domains-btn');
+const discoveredModal = document.getElementById('discovered-domains-modal');
+const ddClose = document.getElementById('dd-close');
+const discoveredList = document.getElementById('discovered-admin-list');
+
+// Metric Elements
+const statEndpoints = document.getElementById('stat-endpoints');
+const statDomains = document.getElementById('stat-domains');
+const statTargets = document.getElementById('stat-targets');
+
 // UI elements
 const searchInput = document.getElementById('endpoint-search');
 const tabSchema = document.getElementById('tab-schema');
@@ -97,6 +108,11 @@ async function fetchSessions() {
         sessionSelect.value = currentSessionId;
       }
     }
+    
+    const active = sessions.find(s => s.id.toString() === currentSessionId);
+    if (active) {
+      statTargets.textContent = active.target.split(',').join(', ');
+    }
   } catch (err) {
     console.error("Failed to fetch sessions", err);
   }
@@ -145,11 +161,16 @@ async function fetchSpec() {
 
 function renderSidebar() {
   endpointList.innerHTML = '';
+  let count = 0;
   
-  if (!currentSpec || !currentSpec.paths) return;
+  if (!currentSpec || !currentSpec.paths) {
+    statEndpoints.textContent = "0";
+    return;
+  }
 
   Object.entries(currentSpec.paths).forEach(([path, methods]) => {
     Object.keys(methods).forEach(method => {
+      count++;
       const li = document.createElement('li');
       li.className = 'endpoint-item';
       if (path === selectedPath && method === selectedMethod.toLowerCase()) {
@@ -171,6 +192,7 @@ function renderSidebar() {
       endpointList.appendChild(li);
     });
   });
+  statEndpoints.textContent = count;
 }
 
 function syntaxHighlight(json) {
@@ -314,6 +336,60 @@ async function renderAdminList() {
   }
 }
 
+// Discovered Domains Modal Logic
+viewDomainsBtn.addEventListener('click', async () => {
+  discoveredModal.classList.remove('hidden');
+  await renderDiscoveredList();
+});
+
+ddClose.addEventListener('click', () => {
+  discoveredModal.classList.add('hidden');
+});
+
+async function renderDiscoveredList() {
+  discoveredList.innerHTML = '';
+  try {
+    const res = await fetch(`${API_URL}/discovered`);
+    const domains = await res.json();
+    
+    statDomains.textContent = domains.length;
+
+    domains.forEach(d => {
+      const li = document.createElement('li');
+      li.className = 'endpoint-item';
+      li.style.justifyContent = 'space-between';
+      li.innerHTML = `
+        <span style="font-family: var(--font-mono); color: var(--text-main);">${d}</span>
+        <button class="glass-btn small primary">+ Add to Scope</button>
+      `;
+      
+      const addBtn = li.querySelector('button');
+      addBtn.onclick = async () => {
+        addBtn.textContent = '...';
+        await fetch(`${API_URL}/sessions/add-target`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({domain: d})
+        });
+        await fetchSpec();
+        await renderDiscoveredList();
+      };
+      
+      discoveredList.appendChild(li);
+    });
+  } catch(err) {
+    console.error(err);
+  }
+}
+
+async function fetchDiscovered() {
+  try {
+    const res = await fetch(`${API_URL}/discovered`);
+    const domains = await res.json();
+    statDomains.textContent = domains.length;
+  } catch(err){}
+}
+
 btnCreate.addEventListener('click', async () => {
   const name = inputName.value.trim();
   const target = inputTarget.value.trim();
@@ -338,5 +414,9 @@ btnCreate.addEventListener('click', async () => {
   }
 });
 
-setInterval(fetchSpec, 2000);
+setInterval(() => {
+  fetchSpec();
+  fetchDiscovered();
+}, 2000);
 fetchSpec();
+fetchDiscovered();

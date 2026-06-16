@@ -7,6 +7,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -21,13 +23,16 @@ type SpecManager struct {
 	db           *sql.DB
 	SessionID    int
 	TargetDomain string
+	IgnoreRules  string
+	Discovered   map[string]bool
 }
 
 type SessionMeta struct {
 	ID        int       `json:"id"`
 	Name      string    `json:"name"`
-	Target    string    `json:"target"`
-	UpdatedAt time.Time `json:"updated_at"`
+	Target      string    `json:"target"`
+	IgnoreRules string    `json:"ignore_rules"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 func NewSpecManager(defaultTarget string) *SpecManager {
@@ -41,13 +46,17 @@ func NewSpecManager(defaultTarget string) *SpecManager {
 		name TEXT, 
 		target TEXT, 
 		spec_json TEXT, 
+		ignore_rules TEXT DEFAULT '',
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	)`)
 	if err != nil {
 		log.Fatalf("Failed to create sessions table: %v", err)
 	}
 
-	sm := &SpecManager{db: db}
+	// Safely add ignore_rules if updating existing db
+	db.Exec(`ALTER TABLE sessions ADD COLUMN ignore_rules TEXT DEFAULT ''`)
+
+	sm := &SpecManager{db: db, Discovered: make(map[string]bool)}
 	sm.LoadLatestOrCreate(defaultTarget)
 	return sm
 }
@@ -59,14 +68,17 @@ func (s *SpecManager) LoadLatestOrCreate(target string) {
 	var specJSON string
 	var id int
 	var t string
+	var ignore string
 
-	err := s.db.QueryRow(`SELECT id, target, spec_json FROM sessions ORDER BY updated_at DESC LIMIT 1`).Scan(&id, &t, &specJSON)
+	err := s.db.QueryRow(`SELECT id, target, ignore_rules, spec_json FROM sessions ORDER BY updated_at DESC LIMIT 1`).Scan(&id, &t, &ignore, &specJSON)
 	if err == nil && specJSON != "" {
 		doc, err := openapi3.NewLoader().LoadFromData([]byte(specJSON))
 		if err == nil {
 			s.doc = doc
 			s.SessionID = id
 			s.TargetDomain = t
+			s.IgnoreRules = ignore
+			s.Discovered = make(map[string]bool)
 			return
 		}
 	}
@@ -78,8 +90,9 @@ func (s *SpecManager) LoadLatestOrCreate(target string) {
 		Paths: openapi3.NewPaths(),
 	}
 	s.TargetDomain = target
+	s.IgnoreRules = "\\.(png|jpg|jpeg|webp|gif|css|js|woff|woff2|ico)$"
 	data, _ := json.Marshal(s.doc)
-	res, err := s.db.Exec(`INSERT INTO sessions (name, target, spec_json) VALUES (?, ?, ?)`, "Initial Run", target, string(data))
+	res, err := s.db.Exec(`INSERT INTO sessions (name, target, ignore_rules, spec_json) VALUES (?, ?, ?, ?)`, "Initial Run", target, s.IgnoreRules, string(data))
 	if err == nil {
 		newID, _ := res.LastInsertId()
 		s.SessionID = int(newID)
@@ -90,6 +103,29 @@ func (s *SpecManager) GetTarget() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.TargetDomain
+}
+
+func (s *SpecManager) IsTarget(host string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	targets := strings.Split(s.TargetDomain, ",")
+	for _, t := range targets {
+		t = strings.TrimSpace(t)
+		if t != "" && strings.Contains(host, t) {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *SpecManager) AddDiscoveredDomain(host string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	host = strings.Split(host, ":")[0]
+	if !s.Discovered[host] {
+		s.Discovered[host] = true
+	}
 }
 
 func (s *SpecManager) saveState() {
@@ -107,6 +143,12 @@ func (s *SpecManager) saveState() {
 func (s *SpecManager) AddEndpoint(req *http.Request, path string, body []byte) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	if s.IgnoreRules != "" {
+		if matched, _ := regexp.MatchString(s.IgnoreRules, path); matched {
+			return
+		}
+	}
 
 	newSchema := parser.ParseResponseBody(body)
 
@@ -149,6 +191,23 @@ func (s *SpecManager) AddEndpoint(req *http.Request, path string, body []byte) {
 
 	if operation.Responses == nil {
 		operation.Responses = openapi3.NewResponses()
+	}
+
+	// Capture last seen payload (convert to valid JSON object/string or base64)
+	if operation.Extensions == nil {
+		operation.Extensions = make(map[string]interface{})
+	}
+	
+	if len(body) > 0 {
+		var raw map[string]interface{}
+		var rawArr []interface{}
+		if err := json.Unmarshal(body, &raw); err == nil {
+			operation.Extensions["x-last-payload"] = raw
+		} else if err := json.Unmarshal(body, &rawArr); err == nil {
+			operation.Extensions["x-last-payload"] = rawArr
+		} else {
+			operation.Extensions["x-last-payload"] = string(body)
+		}
 	}
 
 	for key := range req.URL.Query() {
@@ -264,7 +323,7 @@ func (s *SpecManager) StartExportServer(port string) {
 		}
 
 		if r.Method == "GET" {
-			rows, err := s.db.Query(`SELECT id, name, target, updated_at FROM sessions ORDER BY updated_at DESC`)
+			rows, err := s.db.Query(`SELECT id, name, target, ignore_rules, updated_at FROM sessions ORDER BY updated_at DESC`)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -274,7 +333,7 @@ func (s *SpecManager) StartExportServer(port string) {
 			var sessions []SessionMeta
 			for rows.Next() {
 				var sm SessionMeta
-				rows.Scan(&sm.ID, &sm.Name, &sm.Target, &sm.UpdatedAt)
+				rows.Scan(&sm.ID, &sm.Name, &sm.Target, &sm.IgnoreRules, &sm.UpdatedAt)
 				sessions = append(sessions, sm)
 			}
 			
@@ -287,6 +346,7 @@ func (s *SpecManager) StartExportServer(port string) {
 			var reqData struct {
 				Name   string `json:"name"`
 				Target string `json:"target"`
+				Ignore string `json:"ignore_rules"`
 			}
 			json.NewDecoder(r.Body).Decode(&reqData)
 			
@@ -302,14 +362,57 @@ func (s *SpecManager) StartExportServer(port string) {
 				Paths: openapi3.NewPaths(),
 			}
 			s.TargetDomain = reqData.Target
+			s.IgnoreRules = reqData.Ignore
 			data, _ := json.Marshal(s.doc)
-			res, _ := s.db.Exec(`INSERT INTO sessions (name, target, spec_json) VALUES (?, ?, ?)`, reqData.Name, reqData.Target, string(data))
+			res, _ := s.db.Exec(`INSERT INTO sessions (name, target, ignore_rules, spec_json) VALUES (?, ?, ?, ?)`, reqData.Name, reqData.Target, reqData.Ignore, string(data))
 			newID, _ := res.LastInsertId()
 			s.SessionID = int(newID)
+			s.Discovered = make(map[string]bool)
 			s.mu.Unlock()
 
 			w.WriteHeader(http.StatusOK)
 			return
+		}
+	})
+
+	mux.HandleFunc("/discovered", func(w http.ResponseWriter, r *http.Request) {
+		enableCORS(w)
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		
+		s.mu.Lock()
+		keys := make([]string, 0, len(s.Discovered))
+		for k := range s.Discovered {
+			keys = append(keys, k)
+		}
+		s.mu.Unlock()
+		
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(keys)
+	})
+
+	mux.HandleFunc("/sessions/add-target", func(w http.ResponseWriter, r *http.Request) {
+		enableCORS(w)
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if r.Method == "POST" {
+			var reqData struct {
+				Domain string `json:"domain"`
+			}
+			json.NewDecoder(r.Body).Decode(&reqData)
+
+			s.mu.Lock()
+			// Append to target
+			if !strings.Contains(s.TargetDomain, reqData.Domain) {
+				s.TargetDomain = s.TargetDomain + "," + reqData.Domain
+				s.db.Exec(`UPDATE sessions SET target = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, s.TargetDomain, s.SessionID)
+			}
+			s.mu.Unlock()
+			w.WriteHeader(http.StatusOK)
 		}
 	})
 
@@ -329,12 +432,15 @@ func (s *SpecManager) StartExportServer(port string) {
 			s.mu.Lock()
 			var specJSON string
 			var t string
-			err := s.db.QueryRow(`SELECT target, spec_json FROM sessions WHERE id = ?`, reqData.ID).Scan(&t, &specJSON)
+			var ignore string
+			err := s.db.QueryRow(`SELECT target, ignore_rules, spec_json FROM sessions WHERE id = ?`, reqData.ID).Scan(&t, &ignore, &specJSON)
 			if err == nil {
 				doc, _ := openapi3.NewLoader().LoadFromData([]byte(specJSON))
 				s.doc = doc
 				s.SessionID = reqData.ID
 				s.TargetDomain = t
+				s.IgnoreRules = ignore
+				s.Discovered = make(map[string]bool)
 				s.db.Exec(`UPDATE sessions SET updated_at = CURRENT_TIMESTAMP WHERE id = ?`, reqData.ID)
 			}
 			s.mu.Unlock()
@@ -363,12 +469,15 @@ func (s *SpecManager) StartExportServer(port string) {
 				var specJSON string
 				var id int
 				var target string
-				err := s.db.QueryRow(`SELECT id, target, spec_json FROM sessions ORDER BY updated_at DESC LIMIT 1`).Scan(&id, &target, &specJSON)
+				var ignore string
+				err := s.db.QueryRow(`SELECT id, target, ignore_rules, spec_json FROM sessions ORDER BY updated_at DESC LIMIT 1`).Scan(&id, &target, &ignore, &specJSON)
 				if err == nil {
 					doc, _ := openapi3.NewLoader().LoadFromData([]byte(specJSON))
 					s.doc = doc
 					s.SessionID = id
 					s.TargetDomain = target
+					s.IgnoreRules = ignore
+					s.Discovered = make(map[string]bool)
 				} else {
 					// DB empty, fallback
 					s.doc = &openapi3.T{
@@ -377,10 +486,12 @@ func (s *SpecManager) StartExportServer(port string) {
 						Paths: openapi3.NewPaths(),
 					}
 					s.TargetDomain = "example.com"
+					s.IgnoreRules = ""
 					data, _ := json.Marshal(s.doc)
-					res, _ := s.db.Exec(`INSERT INTO sessions (name, target, spec_json) VALUES (?, ?, ?)`, "Fallback", "example.com", string(data))
+					res, _ := s.db.Exec(`INSERT INTO sessions (name, target, ignore_rules, spec_json) VALUES (?, ?, ?, ?)`, "Fallback", "example.com", "", string(data))
 					newID, _ := res.LastInsertId()
 					s.SessionID = int(newID)
+					s.Discovered = make(map[string]bool)
 				}
 			}
 			s.mu.Unlock()

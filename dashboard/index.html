@@ -70,8 +70,27 @@
           </div>
         </aside>
 
-        <section class="content glass-panel">
-          <div id="welcome-state" class="welcome-state">
+        <section class="content" style="background: transparent; padding: 0; display: flex; flex-direction: column;">
+          <div class="metrics-grid">
+            <div class="metric-card glass-panel">
+              <h4>Total Intercepted</h4>
+              <div id="stat-endpoints" class="metric-value">0</div>
+            </div>
+            <div class="metric-card glass-panel">
+              <h4>Target Scope</h4>
+              <div id="stat-targets" class="metric-value" style="font-size: 1.2rem; overflow-wrap: break-word;">-</div>
+            </div>
+            <div class="metric-card glass-panel">
+              <h4>Shadow Domains</h4>
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div id="stat-domains" class="metric-value" style="color: var(--accent-purple);">0</div>
+                <button id="view-domains-btn" class="glass-btn small" style="border-color: rgba(138,43,226,0.3);">Review</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="content glass-panel" style="flex: 1; padding: 2.5rem;">
+            <div id="welcome-state" class="welcome-state">
             <img src="/favicon.jpg" alt="Logo" class="watermark-logo" />
             <h1>Awaiting Telemetry</h1>
             <p>Route your traffic through <code>localhost:38080</code> and select an endpoint from the sidebar to inspect its auto-generated footprint.</p>
@@ -167,6 +186,24 @@
         </div>
         <div class="modal-actions">
           <button id="ms-close" class="glass-btn primary">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Discovered Domains Modal -->
+    <div id="discovered-domains-modal" class="modal hidden">
+      <div class="modal-content glass-panel" style="width: 600px;">
+        <div class="modal-header">
+          <h3>Shadow Domains Detected</h3>
+          <p>The client attempted to communicate with these out-of-scope domains. Click + to add them to your interception scope.</p>
+        </div>
+        <div class="sidebar-scroll" style="max-height: 350px; padding: 0; background: rgba(0,0,0,0.3); border-radius: 12px; border: 1px solid var(--glass-border);">
+          <ul id="discovered-admin-list" class="endpoint-list" style="padding: 1rem;">
+             <!-- Populated by JS -->
+          </ul>
+        </div>
+        <div class="modal-actions">
+          <button id="dd-close" class="glass-btn secondary">Close</button>
         </div>
       </div>
     </div>

@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"regexp"
 	"syscall"
 
 	"github.com/elazarl/goproxy"
@@ -60,19 +59,26 @@ func main() {
 	p := goproxy.NewProxyHttpServer()
 	p.Verbose = false // Keep false to maintain clean terminal alignment
 
-	// Ensure we MITM all HTTPS requests
-	p.OnRequest().HandleConnect(goproxy.AlwaysMitm)
+	// Ensure we MITM all HTTPS requests dynamically based on target
+	p.OnRequest().HandleConnectFunc(func(host string, ctx *goproxy.ProxyCtx) (*goproxy.ConnectAction, string) {
+		if specManager.IsTarget(host) {
+			return goproxy.MitmConnect, host
+		}
+		specManager.AddDiscoveredDomain(host)
+		return goproxy.OkConnect, host
+	})
 
-	// Filter traffic: Only intercept the target domain dynamically
+	// Filter traffic: Only intercept the target domains dynamically
 	condition := goproxy.ReqConditionFunc(func(req *http.Request, ctx *goproxy.ProxyCtx) bool {
-		target := specManager.GetTarget()
-		matched, _ := regexp.MatchString(fmt.Sprintf(`.*%s.*`, regexp.QuoteMeta(target)), req.URL.Host)
-		return matched
+		return specManager.IsTarget(req.URL.Host) || specManager.IsTarget(req.Host)
 	})
 
 	// Handle Requests
 	p.OnRequest(condition).DoFunc(
 		func(r *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
+			// Force uncompressed responses so we can read the JSON bodies
+			r.Header.Del("Accept-Encoding")
+			
 			// Clean terminal output - Method and Path, aligned
 			fmt.Printf("[REQ]  %-6s %s\n", r.Method, r.URL.Path)
 			return r, nil
