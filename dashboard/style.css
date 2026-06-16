@@ -269,6 +269,22 @@ body {
   transform: translateX(-50%) translateY(0);
 }
 
+.tooltip-bottom .tooltip {
+  bottom: auto;
+  top: 125%;
+  transform: translateX(-50%) translateY(-10px);
+}
+
+.tooltip-bottom .tooltip::after {
+  top: auto;
+  bottom: 100%;
+  border-color: transparent transparent #1e293b transparent;
+}
+
+.tooltip-bottom:hover .tooltip {
+  transform: translateX(-50%) translateY(0);
+}
+
 /* Status Indicator */
 .status-indicator {
   display: flex;
@@ -324,7 +340,6 @@ body {
   border-radius: 16px;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
 }
 
 .sidebar-header {
