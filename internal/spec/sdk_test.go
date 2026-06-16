@@ -16,8 +16,10 @@ func TestNormalizeSDKLanguage(t *testing.T) {
 		t.Fatalf("expected default python, got %q err=%v", language, err)
 	}
 
-	if _, err := normalizeSDKLanguage("typescript-fetch"); err != nil {
-		t.Fatalf("expected supported language, got %v", err)
+	for _, language := range []string{"typescript-fetch", "go", "rust"} {
+		if _, err := normalizeSDKLanguage(language); err != nil {
+			t.Fatalf("expected supported language %q, got %v", language, err)
+		}
 	}
 
 	if _, err := normalizeSDKLanguage("ruby"); err == nil {

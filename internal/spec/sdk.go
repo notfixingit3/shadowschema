@@ -15,6 +15,8 @@ import (
 var allowedSDKLanguages = map[string]struct{}{
 	"python":           {},
 	"typescript-fetch": {},
+	"go":               {},
+	"rust":             {},
 }
 
 func normalizeSDKLanguage(language string) (string, error) {

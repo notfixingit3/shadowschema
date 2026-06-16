@@ -29,6 +29,7 @@ Built for red teamers, security researchers, and systems architects who need to 
 - **WebSocket & WSS Recon:** Detects `ws://` and `wss://` upgrade handshakes, deduplicates socket paths, captures `Sec-WebSocket-*` headers and query params, reassembles fragmented frames, logs ping/pong/close control traffic, and infers evolving JSON message schemas from live text/binary payloads.
 - **Raw Payload Capture:** In addition to inferring the structural schema, ShadowSchema captures the last seen raw JSON payload for each endpoint so you can inspect actual live data alongside inferred types.
 - **Dynamic Python Replay:** Includes a one-click exporter that parses an intercepted endpoint and its last seen payload directly into a functioning Python `requests` script to immediately replicate API calls.
+- **SDK Generation:** One-click OpenAPI client SDK zips for Python, TypeScript, Go, and Rust via OpenAPI Generator.
 - **Persistent Sessions:** Automatically stores mapped endpoints and active sessions in a local SQLite database (`shadowschema.db`) ensuring recon sessions survive shutdowns and restarts.
 - **Progressive Web App (PWA):** Features a sleek, beautiful dashboard to manage target sessions, filter endpoints, and export specifications as JSON.
 
@@ -138,7 +139,7 @@ The background export server on `:38081` powers the dashboard and CLI tooling:
 | `/sessions/switch` | POST | Activate a saved session |
 | `/sessions/delete` | POST | Delete a session |
 | `/sessions/add-target` | POST | Append a domain to the active target list |
-| `/generate-sdk` | POST | Generate a Python or TypeScript SDK zip |
+| `/generate-sdk` | POST | Generate a Python, TypeScript, Go, or Rust SDK zip |
 
 ## 🧪 Testing
 

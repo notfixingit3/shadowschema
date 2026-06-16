@@ -26,8 +26,12 @@ const elRaw = document.getElementById('endpoint-raw');
 const copyPythonBtn = document.getElementById('copy-python-btn');
 const exportBtn = document.getElementById('export-json-btn');
 const exportYamlBtn = document.getElementById('export-yaml-btn');
-const genSdkPythonBtn = document.getElementById('gen-sdk-python-btn');
-const genSdkTsBtn = document.getElementById('gen-sdk-ts-btn');
+const sdkButtons = {
+  python: document.getElementById('gen-sdk-python-btn'),
+  'typescript-fetch': document.getElementById('gen-sdk-ts-btn'),
+  go: document.getElementById('gen-sdk-go-btn'),
+  rust: document.getElementById('gen-sdk-rust-btn'),
+};
 
 // Session elements
 const sessionSelect = document.getElementById('session-select');
@@ -350,8 +354,7 @@ async function fetchSpec() {
     pulse.classList.remove('error');
     exportBtn.disabled = false;
     if(exportYamlBtn) exportYamlBtn.disabled = false;
-    if(genSdkPythonBtn) genSdkPythonBtn.disabled = false;
-    if(genSdkTsBtn) genSdkTsBtn.disabled = false;
+    setSdkButtonsDisabled(false);
     
     if (JSON.stringify(data) !== JSON.stringify(currentSpec)) {
       currentSpec = data;
@@ -365,8 +368,7 @@ async function fetchSpec() {
     pulse.classList.add('error');
     exportBtn.disabled = true;
     if(exportYamlBtn) exportYamlBtn.disabled = true;
-    if(genSdkPythonBtn) genSdkPythonBtn.disabled = true;
-    if(genSdkTsBtn) genSdkTsBtn.disabled = true;
+    setSdkButtonsDisabled(true);
   }
 }
 
@@ -538,8 +540,15 @@ if (exportYamlBtn) {
   });
 }
 
+function setSdkButtonsDisabled(disabled) {
+  Object.values(sdkButtons).forEach(btn => {
+    if (btn) btn.disabled = disabled;
+  });
+}
+
 function downloadSdk(language) {
-  const btn = language === 'python' ? genSdkPythonBtn : genSdkTsBtn;
+  const btn = sdkButtons[language];
+  if (!btn) return;
   const originalText = btn.textContent;
   btn.textContent = '⏳ Generating...';
   btn.disabled = true;
@@ -570,12 +579,9 @@ function downloadSdk(language) {
   });
 }
 
-if (genSdkPythonBtn) {
-  genSdkPythonBtn.addEventListener('click', () => downloadSdk('python'));
-}
-if (genSdkTsBtn) {
-  genSdkTsBtn.addEventListener('click', () => downloadSdk('typescript-fetch'));
-}
+Object.entries(sdkButtons).forEach(([language, btn]) => {
+  if (btn) btn.addEventListener('click', () => downloadSdk(language));
+});
 
 // Copy Python Script logic
 if (copyPythonBtn) {

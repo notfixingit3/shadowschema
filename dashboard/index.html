@@ -72,9 +72,11 @@
               </div>
             </div>
           </div>
-          <div style="padding: 1rem 1rem 0 1rem; display: flex; gap: 0.5rem;">
-            <button id="gen-sdk-python-btn" class="glass-btn small" style="flex: 1;" disabled>🐍 Python SDK</button>
-            <button id="gen-sdk-ts-btn" class="glass-btn small" style="flex: 1;" disabled>📘 TS SDK</button>
+          <div style="padding: 1rem 1rem 0 1rem; display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+            <button id="gen-sdk-python-btn" class="glass-btn small" disabled>🐍 Python</button>
+            <button id="gen-sdk-ts-btn" class="glass-btn small" disabled>📘 TypeScript</button>
+            <button id="gen-sdk-go-btn" class="glass-btn small" disabled>🔷 Go</button>
+            <button id="gen-sdk-rust-btn" class="glass-btn small" disabled>🦀 Rust</button>
           </div>
           <div style="padding: 1rem 1rem 0 1rem;">
             <input type="text" id="endpoint-search" class="glass-input" style="width: 100%;" placeholder="Search paths...">
@@ -162,7 +164,7 @@
             <a href="https://github.com/notfixingit3/shadowschema" target="_blank" rel="noopener" class="footer-link">GitHub</a>
             <a href="https://github.com/notfixingit3/shadowschema/issues" target="_blank" rel="noopener" class="footer-link">Report Issue</a>
             <a href="https://github.com/sponsors/notfixingit3" target="_blank" rel="noopener" class="footer-link sponsor-link">💖 Sponsor</a>
-            <span class="footer-version">v1.1.0-beta.2</span>
+            <span class="footer-version">v1.1.0-beta.3</span>
           </div>
         </div>
       </footer>

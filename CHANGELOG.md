@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.1.0-beta.3] - 2026-06-16
+
+### Added
+- **Go and Rust SDK generation:** Dashboard and `/generate-sdk` now support OpenAPI Generator `go` and `rust` targets alongside Python and TypeScript.
+
 ## [1.1.0-beta.2] - 2026-06-16
 
 ### Added
