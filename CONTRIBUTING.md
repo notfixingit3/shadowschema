@@ -16,10 +16,22 @@ First off, thank you for considering contributing to ShadowSchema! It's people l
 
 ### Development Setup
 
+**Contributors** run the Go and Node dev toolchains directly. **End users** should use the pre-built Docker images (`docker compose up` or `deploy/preview/`) — see `README.md`.
+
 To get started locally:
 1. Clone the repository.
-2. Run `go run main.go` to start the backend proxy.
+2. Run `go run main.go` to start the backend proxy (requires Go 1.21+ with `CGO_ENABLED=1`).
 3. In a separate terminal, navigate to `dashboard/` and run `npm install && npm run dev`.
+
+The Vite dev server proxies export API routes to `:38081` so the dashboard works at `http://localhost:5173` without extra configuration.
+
+To smoke-test production images before pushing:
+
+```bash
+docker build -t shadowschema:local .
+docker build -f Dockerfile.dashboard -t shadowschema-dashboard:local .
+SHADOWSCHEMA_IMAGE=shadowschema:local SHADOWSCHEMA_DASHBOARD_IMAGE=shadowschema-dashboard:local docker compose up -d
+```
 
 ### Testing Guidelines
 
@@ -27,7 +39,8 @@ To get started locally:
 - **Export API / spec logic:** Add tests in `internal/spec/`. Use `newTestSpecManager(t, target)` from `testutil_test.go` so each test gets an isolated SQLite database in a temp directory.
 - **SDK generation:** Tests that call `npx` should skip gracefully when the tool or network is unavailable (`t.Skip`).
 - **Before a release:** Update `CHANGELOG.md`, bump the version in `dashboard/index.html`, and tag with `v*.*.*` to trigger the GitHub release workflow.
-- **preview preview:** Pushes to `dev` publish `:beta` images via `.github/workflows/docker.yml`. On the server, run `docker compose pull && docker compose up -d` in `/opt/stacks/shadowschema_preview`.
+- **Docker images:** `.github/workflows/docker.yml` builds and publishes proxy + dashboard images to GHCR on every push to `main` or `dev` (and on version tags). `dev` gets `:beta` and `:dev`; `main` gets `:latest`.
+- **preview preview:** On the server, run `docker compose pull && docker compose up -d` in the preview stack directory after a `dev` push.
 
 ### Code of Conduct
 

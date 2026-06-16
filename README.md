@@ -6,6 +6,7 @@
 
 <p align="center">
   <a href="https://github.com/notfixingit3/shadowschema/actions"><img src="https://github.com/notfixingit3/shadowschema/actions/workflows/build.yml/badge.svg" alt="Build Status"></a>
+  <a href="https://github.com/notfixingit3/shadowschema/actions"><img src="https://github.com/notfixingit3/shadowschema/actions/workflows/docker.yml/badge.svg" alt="Docker CI"></a>
   <a href="https://goreportcard.com/report/github.com/notfixingit3/shadowschema"><img src="https://goreportcard.com/badge/github.com/notfixingit3/shadowschema" alt="Go Report Card"></a>
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <a href="https://github.com/sponsors/notfixingit3"><img src="https://img.shields.io/badge/sponsor-30363D?style=flat&logo=GitHub-Sponsors&logoColor=#ea4aaa" alt="Sponsor"></a>
@@ -35,23 +36,63 @@ Built for red teamers, security researchers, and systems architects who need to 
 
 ## 🛠️ Infrastructure Requirements
 
-- **Runtime:** Go 1.21+ with CGO enabled (Backend) and Node.js (Dashboard)
+- **Docker users:** Docker Engine with Compose v2 — no Go or Node.js required.
+- **Contributors:** Go 1.21+ with CGO enabled and Node.js 20+ for local development (see `CONTRIBUTING.md`).
 - **Privileges:** Root CA (`certs/ca.crt`) installation capabilities to satisfy client-side SSL validation constraints.
+
+## 🐳 Docker Images
+
+Pre-built images are published to [GitHub Container Registry](https://github.com/notfixingit3/shadowschema/pkgs/container/shadowschema):
+
+| Image | Description |
+|-------|-------------|
+| `ghcr.io/notfixingit3/shadowschema` | MITM proxy + export API (`:38080`, `:38081`) |
+| `ghcr.io/notfixingit3/shadowschema-dashboard` | Production dashboard (static Vite build + nginx on `:8080`) |
+
+| Tag | When published |
+|-----|----------------|
+| `:beta`, `:dev` | Every push to `dev` |
+| `:latest`, `:main` | Every push to `main` |
+| `:v1.1.0-beta.5` | Git tags (semver) |
+
+Pin a release with `SHADOWSCHEMA_IMAGE=ghcr.io/notfixingit3/shadowschema:v1.1.0-beta.5` (see `.env.example`).
 
 ## 🚀 Deployment & Installation
 
 ### Option 1: Docker Compose (Recommended)
-The easiest way to run ShadowSchema and the visual dashboard simultaneously.
+
+Pull pre-built images and run the full stack locally — no compilation on your machine.
+
 ```bash
 git clone https://github.com/notfixingit3/shadowschema.git
 cd shadowschema
-docker-compose up -d
+docker compose pull
+docker compose up -d
 ```
-The dashboard will be instantly available at `http://localhost:5173`. 
-*Note:* The generated CA certificate will appear in the `./certs/` directory on your host machine.
+
+| Service | URL |
+|---------|-----|
+| Dashboard | http://localhost:8080 |
+| MITM proxy | `127.0.0.1:38080` |
+| Export API | http://localhost:38081 |
+
+The generated CA certificate appears in `./certs/` on your host (bind-mounted from the proxy container). Session data persists in the `shadowschema-data` Docker volume.
+
+To update after a new release:
+
+```bash
+docker compose pull && docker compose up -d
+```
+
+To copy the CA cert out of a running container:
+
+```bash
+docker cp shadowschema-proxy:/app/certs/ca.crt ./ca.crt
+```
 
 ### Option 2: preview Preview (Traefik)
-For hosting behind Traefik on the `preview.me` network, see `deploy/preview/`. The stack pulls pre-built images from GHCR (`:beta` on every `dev` push) — no on-server compilation.
+
+For hosting behind Traefik on the `preview.me` network, see `deploy/preview/`. Copy `.env.example` to `.env` to pin image tags.
 
 ```bash
 cd deploy/preview
@@ -61,23 +102,30 @@ docker compose up -d
 
 Live preview: https://preview.example.internal
 
-### Option 3: Build from Source
-Initiate the proxy engine locally. By default, it will load your last active session from the SQLite database.
+### Option 3: Build from Source (Contributors)
+
+For hacking on the proxy or dashboard, run the dev toolchain directly. By default, the proxy loads your last active session from the SQLite database.
 
 ```bash
-# Initiate the MITM engine
+# MITM engine
 go run main.go
 ```
 
-#### 🖥️ Live Visualization Dashboard
-
-To start the local dashboard:
 ```bash
+# Dashboard dev server (proxies export API to :38081)
 cd dashboard
 npm install
 npm run dev
 ```
-Navigate to `http://localhost:5173` to watch your map build itself in real time. From the dashboard you can create new Target Sessions, manage noise cancellation rules, explore Shadow Domains, and inspect WebSocket endpoints (upgrade metadata, captured frames, and inferred message schemas).
+
+Navigate to `http://localhost:5173`. From the dashboard you can create Target Sessions, manage noise cancellation rules, explore Shadow Domains, and inspect WebSocket endpoints.
+
+To build images locally:
+
+```bash
+docker build -t shadowschema:local .
+docker build -f Dockerfile.dashboard -t shadowschema-dashboard:local .
+```
 
 ## 🎮 Usage Examples
 

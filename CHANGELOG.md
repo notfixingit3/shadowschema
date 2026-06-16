@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.1.0-beta.5] - 2026-06-16
+
+### Changed
+- Root `docker-compose.yml` and README now use pre-built GHCR images (`:beta`) instead of compiling with `go run` at container start.
+- Local Docker stack serves the production dashboard at `http://localhost:8080` with same-origin export API via nginx.
+
 ## [1.1.0-beta.4] - 2026-06-16
 
 ### Added
