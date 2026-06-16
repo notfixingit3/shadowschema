@@ -229,7 +229,7 @@ func (s *SpecManager) ExportJSON(filename string) error {
 
 func enableCORS(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 }
 
@@ -336,6 +336,52 @@ func (s *SpecManager) StartExportServer(port string) {
 				s.SessionID = reqData.ID
 				s.TargetDomain = t
 				s.db.Exec(`UPDATE sessions SET updated_at = CURRENT_TIMESTAMP WHERE id = ?`, reqData.ID)
+			}
+			s.mu.Unlock()
+			w.WriteHeader(http.StatusOK)
+		}
+	})
+
+	mux.HandleFunc("/sessions/delete", func(w http.ResponseWriter, r *http.Request) {
+		enableCORS(w)
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		if r.Method == "POST" {
+			var reqData struct {
+				ID int `json:"id"`
+			}
+			json.NewDecoder(r.Body).Decode(&reqData)
+
+			s.mu.Lock()
+			s.db.Exec(`DELETE FROM sessions WHERE id = ?`, reqData.ID)
+			
+			// If we just deleted the active session, load whatever is left or create a fallback
+			if s.SessionID == reqData.ID {
+				var specJSON string
+				var id int
+				var target string
+				err := s.db.QueryRow(`SELECT id, target, spec_json FROM sessions ORDER BY updated_at DESC LIMIT 1`).Scan(&id, &target, &specJSON)
+				if err == nil {
+					doc, _ := openapi3.NewLoader().LoadFromData([]byte(specJSON))
+					s.doc = doc
+					s.SessionID = id
+					s.TargetDomain = target
+				} else {
+					// DB empty, fallback
+					s.doc = &openapi3.T{
+						OpenAPI: "3.0.0",
+						Info: &openapi3.Info{Title: "ShadowSchema Auto-Generated API", Version: "1.0.0"},
+						Paths: openapi3.NewPaths(),
+					}
+					s.TargetDomain = "example.com"
+					data, _ := json.Marshal(s.doc)
+					res, _ := s.db.Exec(`INSERT INTO sessions (name, target, spec_json) VALUES (?, ?, ?)`, "Fallback", "example.com", string(data))
+					newID, _ := res.LastInsertId()
+					s.SessionID = int(newID)
+				}
 			}
 			s.mu.Unlock()
 			w.WriteHeader(http.StatusOK)

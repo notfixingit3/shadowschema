@@ -26,6 +26,12 @@ const btnCreate = document.getElementById('ns-create');
 const inputName = document.getElementById('ns-name');
 const inputTarget = document.getElementById('ns-target');
 
+// Admin elements
+const manageBtn = document.getElementById('manage-sessions-btn');
+const adminModal = document.getElementById('manage-sessions-modal');
+const adminClose = document.getElementById('ms-close');
+const adminList = document.getElementById('session-admin-list');
+
 let currentSpec = null;
 let selectedPath = null;
 let selectedMethod = null;
@@ -217,6 +223,54 @@ newSessionBtn.addEventListener('click', () => {
 btnCancel.addEventListener('click', () => {
   modal.classList.add('hidden');
 });
+
+// Admin Modal Logic
+manageBtn.addEventListener('click', async () => {
+  adminModal.classList.remove('hidden');
+  await renderAdminList();
+});
+
+adminClose.addEventListener('click', () => {
+  adminModal.classList.add('hidden');
+});
+
+async function renderAdminList() {
+  adminList.innerHTML = '';
+  try {
+    const res = await fetch(`${API_URL}/sessions`);
+    const sessions = await res.json();
+    
+    sessions.forEach(s => {
+      const li = document.createElement('li');
+      li.className = 'endpoint-item';
+      li.style.justifyContent = 'space-between';
+      li.innerHTML = `
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          <strong style="color: var(--accent-cyan)">${s.name}</strong>
+          <span style="font-size: 0.8rem; color: var(--text-muted)">Target: ${s.target}</span>
+        </div>
+        <button class="glass-btn small" style="background: rgba(239, 68, 68, 0.2); border-color: rgba(239,68,68,0.4); color: #f87171;">Delete</button>
+      `;
+      
+      const delBtn = li.querySelector('button');
+      delBtn.onclick = async () => {
+        delBtn.textContent = '...';
+        await fetch(`${API_URL}/sessions/delete`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({id: s.id})
+        });
+        currentSessionId = null; // force a clean reload
+        await fetchSpec();
+        await renderAdminList();
+      };
+      
+      adminList.appendChild(li);
+    });
+  } catch(err) {
+    console.error(err);
+  }
+}
 
 btnCreate.addEventListener('click', async () => {
   const name = inputName.value.trim();

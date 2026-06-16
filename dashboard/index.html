@@ -30,11 +30,15 @@
         
         <div class="header-right">
           <div class="session-controls">
-            <div class="tooltip-container">
+            <div class="tooltip-container tooltip-bottom">
               <select id="session-select" class="glass-input"></select>
               <span class="tooltip">Switch active reconnaissance session</span>
             </div>
-            <div class="tooltip-container">
+            <div class="tooltip-container tooltip-bottom">
+              <button id="manage-sessions-btn" class="glass-btn small">Manage</button>
+              <span class="tooltip">Manage saved sessions</span>
+            </div>
+            <div class="tooltip-container tooltip-bottom">
               <button id="new-session-btn" class="glass-btn primary">+ New Target</button>
               <span class="tooltip">Deploy a new MITM filter</span>
             </div>
@@ -136,6 +140,24 @@
         <div class="modal-actions">
           <button id="ns-cancel" class="glass-btn secondary">Abort</button>
           <button id="ns-create" class="glass-btn primary">Initialize Recon</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Manage Sessions Modal -->
+    <div id="manage-sessions-modal" class="modal hidden">
+      <div class="modal-content glass-panel" style="width: 600px;">
+        <div class="modal-header">
+          <h3>Session Management</h3>
+          <p>Delete obsolete reconnaissance sessions.</p>
+        </div>
+        <div class="sidebar-scroll" style="max-height: 350px; padding: 0; background: rgba(0,0,0,0.3); border-radius: 12px; border: 1px solid var(--glass-border);">
+          <ul id="session-admin-list" class="endpoint-list" style="padding: 1rem;">
+             <!-- Populated by JS -->
+          </ul>
+        </div>
+        <div class="modal-actions">
+          <button id="ms-close" class="glass-btn primary">Close</button>
         </div>
       </div>
     </div>
