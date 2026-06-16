@@ -49,7 +49,10 @@ docker-compose up -d
 The dashboard will be instantly available at `http://localhost:5173`. 
 *Note:* The generated CA certificate will appear in the `./certs/` directory on your host machine.
 
-### Option 2: Build from Source
+### Option 2: preview Preview (Traefik)
+For hosting behind Traefik on the `preview.me` network, see `deploy/preview/` (nginx front, dashboard + proxy backends). Live preview: https://preview.example.internal
+
+### Option 3: Build from Source
 Initiate the proxy engine locally. By default, it will load your last active session from the SQLite database.
 
 ```bash

@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.1.0-beta.2] - 2026-06-16
+
+### Added
+- **preview deployment stack:** `deploy/preview/` with Traefik + nginx + docker-compose for hosting at `preview.example.internal`.
+- **Vite dev proxy:** Dashboard dev server proxies export API routes to `:38081` for same-origin local development.
+
+### Changed
+- Dashboard uses same-origin API URLs (`VITE_API_URL`) so the export API works behind a reverse proxy.
+- Welcome screen shows the live proxy hostname (e.g. `notfixingit:38080`) instead of hardcoded `localhost`.
+- Root `docker-compose.yml` sets `GOTOOLCHAIN=auto` for Go 1.26+ module compatibility.
+
+### Fixed
+- Vite host blocking behind Traefik: nginx sends `Host: localhost` upstream; `allowedHosts` and HMR configured for HTTPS preview.
+
 ## [1.1.0-beta.1] - 2026-06-16
 
 ### Added

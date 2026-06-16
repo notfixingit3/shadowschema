@@ -3,7 +3,13 @@ import { registerSW } from 'virtual:pwa-register';
 
 registerSW({ immediate: true });
 
-const API_URL = 'http://localhost:38081';
+const API_URL = import.meta.env.VITE_API_URL ?? '';
+
+const proxyHint = document.getElementById('proxy-hint');
+if (proxyHint) {
+  const host = window.location.hostname === 'localhost' ? 'localhost' : window.location.hostname;
+  proxyHint.textContent = `${host}:38080`;
+}
 
 const statusText = document.getElementById('connection-status');
 const pulse = document.querySelector('.pulse');
@@ -98,7 +104,7 @@ if (vaultBtn && vaultModal && vaultClose && vaultList) {
     vaultModal.classList.remove('hidden');
     vaultList.innerHTML = '<tr><td colspan="3" style="text-align:center; padding: 1rem;">Loading...</td></tr>';
     
-    fetch('http://localhost:38081/vault')
+    fetch(`${API_URL}/vault`)
       .then(res => res.json())
       .then(creds => {
         vaultList.innerHTML = '';
@@ -528,7 +534,7 @@ exportBtn.addEventListener('click', () => {
 
 if (exportYamlBtn) {
   exportYamlBtn.addEventListener('click', () => {
-    window.location.href = 'http://localhost:38081/export-map?format=yaml';
+    window.location.href = `${API_URL}/export-map?format=yaml`;
   });
 }
 
@@ -538,7 +544,7 @@ function downloadSdk(language) {
   btn.textContent = '⏳ Generating...';
   btn.disabled = true;
 
-  fetch('http://localhost:38081/generate-sdk', {
+  fetch(`${API_URL}/generate-sdk`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ language })
