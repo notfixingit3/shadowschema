@@ -18,6 +18,9 @@ const elResponse = document.getElementById('endpoint-response');
 const elRaw = document.getElementById('endpoint-raw');
 const copyPythonBtn = document.getElementById('copy-python-btn');
 const exportBtn = document.getElementById('export-json-btn');
+const exportYamlBtn = document.getElementById('export-yaml-btn');
+const genSdkPythonBtn = document.getElementById('gen-sdk-python-btn');
+const genSdkTsBtn = document.getElementById('gen-sdk-ts-btn');
 
 // Session elements
 const sessionSelect = document.getElementById('session-select');
@@ -147,6 +150,9 @@ async function fetchSpec() {
     statusText.textContent = 'Listening (Secure)';
     pulse.classList.remove('error');
     exportBtn.disabled = false;
+    if(exportYamlBtn) exportYamlBtn.disabled = false;
+    if(genSdkPythonBtn) genSdkPythonBtn.disabled = false;
+    if(genSdkTsBtn) genSdkTsBtn.disabled = false;
     
     if (JSON.stringify(data) !== JSON.stringify(currentSpec)) {
       currentSpec = data;
@@ -159,6 +165,9 @@ async function fetchSpec() {
     statusText.textContent = 'Proxy Offline';
     pulse.classList.add('error');
     exportBtn.disabled = true;
+    if(exportYamlBtn) exportYamlBtn.disabled = true;
+    if(genSdkPythonBtn) genSdkPythonBtn.disabled = true;
+    if(genSdkTsBtn) genSdkTsBtn.disabled = true;
   }
 }
 
@@ -277,6 +286,51 @@ exportBtn.addEventListener('click', () => {
   dlAnchorElem.setAttribute("download", `shadowschema_${currentSessionId}.json`);
   dlAnchorElem.click();
 });
+
+if (exportYamlBtn) {
+  exportYamlBtn.addEventListener('click', () => {
+    window.location.href = 'http://localhost:38081/export-map?format=yaml';
+  });
+}
+
+function downloadSdk(language) {
+  const btn = language === 'python' ? genSdkPythonBtn : genSdkTsBtn;
+  const originalText = btn.textContent;
+  btn.textContent = '⏳ Generating...';
+  btn.disabled = true;
+
+  fetch('http://localhost:38081/generate-sdk', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ language })
+  })
+  .then(res => {
+    if (!res.ok) throw new Error("Failed to generate SDK");
+    return res.blob();
+  })
+  .then(blob => {
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `shadowschema_${language}_sdk.zip`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+    btn.textContent = '✅ Success';
+    setTimeout(() => { btn.textContent = originalText; btn.disabled = false; }, 2000);
+  })
+  .catch(err => {
+    console.error(err);
+    btn.textContent = '❌ Error';
+    setTimeout(() => { btn.textContent = originalText; btn.disabled = false; }, 2000);
+  });
+}
+
+if (genSdkPythonBtn) {
+  genSdkPythonBtn.addEventListener('click', () => downloadSdk('python'));
+}
+if (genSdkTsBtn) {
+  genSdkTsBtn.addEventListener('click', () => downloadSdk('typescript-fetch'));
+}
 
 // Copy Python Script logic
 if (copyPythonBtn) {

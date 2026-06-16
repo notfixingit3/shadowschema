@@ -56,11 +56,21 @@
       <main class="dashboard">
         <aside class="sidebar glass-panel">
           <div class="sidebar-header">
-            <h2>Intercepted Endpoints</h2>
-            <div class="tooltip-container tooltip-bottom">
-              <button id="export-json-btn" class="glass-btn small" disabled>⬇ Export JSON</button>
-              <span class="tooltip">Download current OpenAPI spec</span>
+            <h2>Endpoints</h2>
+            <div style="display: flex; gap: 0.5rem;">
+              <div class="tooltip-container tooltip-bottom">
+                <button id="export-yaml-btn" class="glass-btn small" disabled>YAML</button>
+                <span class="tooltip">Export OpenAPI YAML</span>
+              </div>
+              <div class="tooltip-container tooltip-bottom">
+                <button id="export-json-btn" class="glass-btn small" disabled>JSON</button>
+                <span class="tooltip">Export OpenAPI JSON</span>
+              </div>
             </div>
+          </div>
+          <div style="padding: 1rem 1rem 0 1rem; display: flex; gap: 0.5rem;">
+            <button id="gen-sdk-python-btn" class="glass-btn small" style="flex: 1;" disabled>🐍 Python SDK</button>
+            <button id="gen-sdk-ts-btn" class="glass-btn small" style="flex: 1;" disabled>📘 TS SDK</button>
           </div>
           <div style="padding: 1rem 1rem 0 1rem;">
             <input type="text" id="endpoint-search" class="glass-input" style="width: 100%;" placeholder="Search paths...">

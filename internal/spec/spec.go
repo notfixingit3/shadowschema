@@ -1,16 +1,22 @@
 package spec
 
 import (
+	"archive/zip"
+	"bytes"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
 	"time"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	_ "github.com/mattn/go-sqlite3"
@@ -311,6 +317,20 @@ func (s *SpecManager) StartExportServer(port string) {
 			return
 		}
 
+		format := r.URL.Query().Get("format")
+		if format == "yaml" {
+			var obj interface{}
+			if err := json.Unmarshal(data, &obj); err == nil {
+				if yamlData, err := yaml.Marshal(obj); err == nil {
+					w.Header().Set("Content-Type", "application/yaml")
+					_, _ = w.Write(yamlData)
+					return
+				}
+			}
+			http.Error(w, "Failed to convert to YAML", http.StatusInternalServerError)
+			return
+		}
+
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write(data)
 	})
@@ -510,6 +530,86 @@ func (s *SpecManager) StartExportServer(port string) {
 			s.mu.Unlock()
 			w.WriteHeader(http.StatusOK)
 		}
+	})
+
+	mux.HandleFunc("/generate-sdk", func(w http.ResponseWriter, r *http.Request) {
+		enableCORS(w)
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if r.Method != "POST" {
+			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		var reqData struct {
+			Language string `json:"language"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
+
+		if reqData.Language == "" {
+			reqData.Language = "python"
+		}
+
+		s.mu.Lock()
+		data, err := json.Marshal(s.doc)
+		s.mu.Unlock()
+
+		if err != nil {
+			http.Error(w, "Failed to serialize spec", http.StatusInternalServerError)
+			return
+		}
+
+		tmpDir, err := os.MkdirTemp("", "shadowschema-sdk-*")
+		if err != nil {
+			http.Error(w, "Failed to create temp dir", http.StatusInternalServerError)
+			return
+		}
+		defer os.RemoveAll(tmpDir)
+
+		specFile := filepath.Join(tmpDir, "spec.json")
+		if err := os.WriteFile(specFile, data, 0644); err != nil {
+			http.Error(w, "Failed to write spec", http.StatusInternalServerError)
+			return
+		}
+
+		outDir := filepath.Join(tmpDir, "out")
+		cmd := exec.Command("npx", "-y", "@openapitools/openapi-generator-cli", "generate", "-i", specFile, "-g", reqData.Language, "-o", outDir)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			log.Printf("SDK Gen Error: %v\nOutput: %s", err, string(out))
+			http.Error(w, "Failed to generate SDK: "+string(out), http.StatusInternalServerError)
+			return
+		}
+
+		// Zip the output
+		zipBuf := new(bytes.Buffer)
+		zipWriter := zip.NewWriter(zipBuf)
+
+		filepath.Walk(outDir, func(path string, info os.FileInfo, err error) error {
+			if err != nil || info.IsDir() {
+				return err
+			}
+			relPath, _ := filepath.Rel(outDir, path)
+			f, err := zipWriter.Create(relPath)
+			if err != nil {
+				return err
+			}
+			fileContent, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			_, err = f.Write(fileContent)
+			return err
+		})
+		zipWriter.Close()
+
+		w.Header().Set("Content-Type", "application/zip")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s_sdk.zip\"", reqData.Language))
+		w.Write(zipBuf.Bytes())
 	})
 
 	fmt.Printf("[INFO] Export server running on %s\n", port)
