@@ -1,33 +1,72 @@
 package spec
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"sync"
 
 	"github.com/getkin/kin-openapi/openapi3"
+	_ "github.com/mattn/go-sqlite3"
 	"shadowschema/internal/parser"
 )
 
 type SpecManager struct {
 	mu  sync.Mutex
 	doc *openapi3.T
+	db  *sql.DB
 }
 
 func NewSpecManager() *SpecManager {
-	doc := &openapi3.T{
-		OpenAPI: "3.0.0",
-		Info: &openapi3.Info{
-			Title:   "ShadowSchema Auto-Generated API",
-			Version: "1.0.0",
-		},
-		Paths: openapi3.NewPaths(),
+	db, err := sql.Open("sqlite3", "./shadowschema.db")
+	if err != nil {
+		log.Fatalf("Failed to open sqlite database: %v", err)
+	}
+
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS state (id INTEGER PRIMARY KEY, spec_json TEXT)`)
+	if err != nil {
+		log.Fatalf("Failed to create state table: %v", err)
+	}
+
+	var doc *openapi3.T
+	var specJSON string
+	err = db.QueryRow(`SELECT spec_json FROM state WHERE id = 1`).Scan(&specJSON)
+	if err == nil && specJSON != "" {
+		doc, err = openapi3.NewLoader().LoadFromData([]byte(specJSON))
+		if err != nil {
+			log.Printf("[WARN] Failed to load spec from database: %v. Starting fresh.", err)
+		}
+	}
+
+	if doc == nil {
+		doc = &openapi3.T{
+			OpenAPI: "3.0.0",
+			Info: &openapi3.Info{
+				Title:   "ShadowSchema Auto-Generated API",
+				Version: "1.0.0",
+			},
+			Paths: openapi3.NewPaths(),
+		}
 	}
 
 	return &SpecManager{
 		doc: doc,
+		db:  db,
+	}
+}
+
+func (s *SpecManager) saveState() {
+	data, err := json.Marshal(s.doc)
+	if err != nil {
+		log.Printf("[ERROR] Failed to marshal spec for DB: %v", err)
+		return
+	}
+	_, err = s.db.Exec(`INSERT OR REPLACE INTO state (id, spec_json) VALUES (1, ?)`, string(data))
+	if err != nil {
+		log.Printf("[ERROR] Failed to save state to DB: %v", err)
 	}
 }
 
@@ -101,6 +140,9 @@ func (s *SpecManager) AddEndpoint(method, path string, body []byte) {
 			resp.Value.Content["application/json"] = mediaType
 		}
 	}
+
+	// Persist the state
+	s.saveState()
 }
 
 func (s *SpecManager) ExportJSON(filename string) error {
