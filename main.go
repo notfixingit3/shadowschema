@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -21,12 +22,28 @@ import (
 
 var (
 	targetDomain = flag.String("target", "example.com", "Target domain to intercept and map")
-	port         = flag.String("port", ":8080", "Port to run the MITM proxy on")
-	exportPort   = flag.String("export-port", ":8081", "Port to run the export server on")
+	port         = flag.String("port", ":38080", "Port to run the MITM proxy on")
+	exportPort   = flag.String("export-port", ":38081", "Port to run the export server on")
 )
+
+func isPortAvailable(port string) bool {
+	ln, err := net.Listen("tcp", port)
+	if err != nil {
+		return false
+	}
+	ln.Close()
+	return true
+}
 
 func main() {
 	flag.Parse()
+
+	if !isPortAvailable(*port) {
+		log.Fatalf("Proxy port %s is already in use or unavailable\n", *port)
+	}
+	if !isPortAvailable(*exportPort) {
+		log.Fatalf("Export port %s is already in use or unavailable\n", *exportPort)
+	}
 
 	// 1. Initialize CA
 	if err := proxy.InitCA("certs"); err != nil {
