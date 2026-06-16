@@ -10,6 +10,7 @@ const pulse = document.querySelector('.pulse');
 const endpointList = document.getElementById('endpoint-list');
 const welcomeState = document.getElementById('welcome-state');
 const endpointDetails = document.getElementById('endpoint-details');
+const detailPanel = document.getElementById('detail-panel');
 
 const elMethod = document.getElementById('endpoint-method');
 const elPath = document.getElementById('endpoint-path');
@@ -131,6 +132,157 @@ let selectedPath = null;
 let selectedMethod = null;
 let currentSessionId = null;
 
+const HTTP_METHODS = new Set(['get', 'post', 'put', 'delete', 'patch', 'head', 'options', 'trace', 'connect']);
+
+function isWebSocketOperation(method, operation) {
+  if (operation && operation['x-websocket'] === true) return true;
+  return method.toLowerCase() === 'trace';
+}
+
+function displayMethodFor(method, operation) {
+  return isWebSocketOperation(method, operation) ? 'WS' : method.toUpperCase();
+}
+
+function renderWebSocketStats(stats) {
+  if (!stats) {
+    return '<div class="ws-stats-empty">No frames intercepted yet.</div>';
+  }
+
+  const items = [
+    ['Total', stats.total || 0],
+    ['Data', stats.data || 0],
+    ['Control', stats.control || 0],
+    ['Inbound', stats.in || 0],
+    ['Outbound', stats.out || 0],
+    ['Fragmented', stats.fragmented || 0],
+  ];
+
+  return `
+    <div class="ws-stats-grid">
+      ${items.map(([label, value]) => `
+        <div class="ws-stat-item">
+          <span class="ws-stat-label">${label}</span>
+          <span class="ws-stat-value">${value}</span>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function formatWebSocketPayload(payload) {
+  if (payload == null) return '<span class="ws-payload-empty">(empty)</span>';
+  if (typeof payload === 'string') return `<code>${payload}</code>`;
+  if (payload.close_code !== undefined) {
+    const reason = payload.close_reason ? ` — ${payload.close_reason}` : '';
+    return `<code>close ${payload.close_code}${reason}</code>`;
+  }
+  if (payload.encoding === 'base64') {
+    return `<code>[binary ${payload.size || 0} bytes]</code>`;
+  }
+  return `<code>${JSON.stringify(payload)}</code>`;
+}
+
+function renderWebSocketSchemas(operation) {
+  const inbound = operation['x-websocket-message-schema-in'];
+  const outbound = operation['x-websocket-message-schema-out'];
+  const legacy = operation['x-websocket-message-schema'];
+
+  const blocks = [];
+
+  if (outbound) {
+    blocks.push(`
+      <div style="margin-top: 1.25rem;">
+        <div style="color: #60a5fa; font-size: 0.85rem; margin-bottom: 0.5rem;">Outbound Messages (client → server)</div>
+        ${syntaxHighlight(outbound)}
+      </div>
+    `);
+  }
+
+  if (inbound) {
+    blocks.push(`
+      <div style="margin-top: 1.25rem;">
+        <div style="color: #34d399; font-size: 0.85rem; margin-bottom: 0.5rem;">Inbound Messages (server → client)</div>
+        ${syntaxHighlight(inbound)}
+      </div>
+    `);
+  }
+
+  if (blocks.length === 0 && legacy) {
+    blocks.push(`
+      <div style="margin-top: 1.25rem;">
+        <div style="color: #38bdf8; font-size: 0.85rem; margin-bottom: 0.5rem;">Inferred Message Schema</div>
+        ${syntaxHighlight(legacy)}
+      </div>
+    `);
+  }
+
+  if (blocks.length === 0) {
+    return `<div style="color: #64748b; margin-top: 1rem; font-size: 0.9rem;">Directional message schemas will appear here as client and server frames are intercepted.</div>`;
+  }
+
+  return blocks.join('');
+}
+
+function vaultHeadersFromSpec(spec) {
+  const headers = {};
+  const vault = spec?.['x-shadowschema-vault'];
+  if (!Array.isArray(vault)) return headers;
+
+  vault.forEach(c => {
+    if (c.header_name && c.token_value) {
+      headers[c.header_name] = c.token_value;
+    }
+  });
+  return headers;
+}
+
+async function resolveVaultHeaders(spec) {
+  let headers = vaultHeadersFromSpec(spec);
+  if (Object.keys(headers).length > 0) {
+    return headers;
+  }
+
+  try {
+    const res = await fetch(`${API_URL}/vault`);
+    if (!res.ok) return headers;
+    const creds = await res.json();
+    creds.forEach(c => {
+      if (c.header_name && c.token_value) {
+        headers[c.header_name] = c.token_value;
+      }
+    });
+  } catch (err) {
+    console.error('Failed to fetch vault credentials', err);
+  }
+  return headers;
+}
+
+function renderWebSocketFrameLog(frames) {
+  if (!frames || frames.length === 0) {
+    return '<div class="ws-frame-empty">Waiting for intercepted WebSocket frames...</div>';
+  }
+
+  const rows = [...frames].reverse().map(frame => {
+    const direction = frame.direction === 'in' ? 'IN' : 'OUT';
+    const directionClass = frame.direction === 'in' ? 'ws-dir-in' : 'ws-dir-out';
+    const frag = frame.fragmented ? `<span class="ws-frag-badge">${frame.fragments} frags</span>` : '';
+    const time = frame.captured_at ? new Date(frame.captured_at).toLocaleTimeString() : '';
+    return `
+      <div class="ws-frame-row">
+        <div class="ws-frame-meta">
+          <span class="ws-dir-badge ${directionClass}">${direction}</span>
+          <span class="ws-opcode-badge">${(frame.opcode_name || 'unknown').toUpperCase()}</span>
+          ${frag}
+          <span class="ws-frame-time">${time}</span>
+        </div>
+        <div class="ws-frame-payload">${formatWebSocketPayload(frame.payload)}</div>
+      </div>
+    `;
+  }).join('');
+
+  return `<div class="ws-frame-log">${rows}</div>`;
+}
+
 async function fetchSessions() {
   try {
     const res = await fetch(`${API_URL}/sessions`);
@@ -226,6 +378,9 @@ function renderSidebar() {
 
   Object.entries(currentSpec.paths).forEach(([path, methods]) => {
     Object.keys(methods).forEach(method => {
+      if (!HTTP_METHODS.has(method.toLowerCase())) return;
+
+      const operation = methods[method];
       count++;
       const li = document.createElement('li');
       li.className = 'endpoint-item';
@@ -233,7 +388,7 @@ function renderSidebar() {
         li.classList.add('active');
       }
       
-      let displayMethod = method.toUpperCase() === 'TRACE' ? 'WS' : method.toUpperCase();
+      const displayMethod = displayMethodFor(method, operation);
       
       li.innerHTML = `
         <span class="method-badge badge-${displayMethod}">${displayMethod}</span>
@@ -243,8 +398,9 @@ function renderSidebar() {
       li.onclick = () => {
         selectedPath = path;
         selectedMethod = method.toUpperCase();
-        renderSidebar(); 
+        renderSidebar();
         renderDetails(path, method.toUpperCase());
+        resetDetailScroll();
       };
       
       endpointList.appendChild(li);
@@ -277,16 +433,27 @@ function syntaxHighlight(json) {
   });
 }
 
+function resetDetailScroll() {
+  if (detailPanel) {
+    detailPanel.scrollTop = 0;
+  }
+}
+
 function renderDetails(path, method) {
   welcomeState.classList.add('hidden');
   endpointDetails.classList.remove('hidden');
   
-  let displayMethod = method.toUpperCase() === 'TRACE' ? 'WS' : method.toUpperCase();
+  const operation = currentSpec.paths[path][method.toLowerCase()];
+  const isWS = isWebSocketOperation(method, operation);
+  const displayMethod = displayMethodFor(method, operation);
+
   elMethod.className = `method-badge large badge-${displayMethod}`;
   elMethod.textContent = displayMethod;
   elPath.textContent = path;
-  
-  const operation = currentSpec.paths[path][method.toLowerCase()];
+
+  if (copyPythonBtn) {
+    copyPythonBtn.style.display = isWS ? 'none' : '';
+  }
   
   elParams.innerHTML = '';
   if (operation.parameters && operation.parameters.length > 0) {
@@ -303,10 +470,38 @@ function renderDetails(path, method) {
       elParams.appendChild(row);
     });
   } else {
-    elParams.innerHTML = '<div style="color: var(--text-muted); font-size: 0.9rem; padding: 1rem;">No parameters detected.</div>';
+    elParams.innerHTML = `<div style="color: var(--text-muted); font-size: 0.9rem; padding: 1rem;">${isWS ? 'No upgrade query params or Sec-WebSocket headers captured yet.' : 'No parameters detected.'}</div>`;
   }
+
+  if (isWS) {
+    if (tabSchema) tabSchema.textContent = 'Message Schema';
+    if (tabRaw) tabRaw.textContent = 'Frame Log';
+
+    const summary = operation.summary || 'WebSocket Connection';
+    const description = operation.description || 'Detected WebSocket upgrade on this endpoint.';
+    const stats = operation['x-websocket-stats'];
+    const schemaBlock = renderWebSocketSchemas(operation);
+
+    elResponse.innerHTML = `
+      <div style="padding: 0.5rem 0;">
+        <div style="color: #f472b6; font-weight: 600; margin-bottom: 0.75rem;">${summary}</div>
+        <div style="color: var(--text-muted); line-height: 1.6;">${description}</div>
+        <div style="margin-top: 1.25rem;">
+          <div style="color: #38bdf8; font-size: 0.85rem; margin-bottom: 0.5rem;">Live Frame Stats</div>
+          ${renderWebSocketStats(stats)}
+        </div>
+        ${schemaBlock}
+      </div>
+    `;
+
+    elRaw.innerHTML = renderWebSocketFrameLog(operation['x-websocket-frames']);
+    return;
+  }
+
+  if (tabSchema) tabSchema.textContent = 'JSON Schema';
+  if (tabRaw) tabRaw.textContent = 'Last Raw Payload';
   
-  const response = operation.responses['200'];
+  const response = operation.responses && operation.responses['200'];
   if (response && response.content && response.content['application/json']) {
     const schema = response.content['application/json'].schema;
     elResponse.innerHTML = syntaxHighlight(schema);
@@ -378,20 +573,21 @@ if (genSdkTsBtn) {
 
 // Copy Python Script logic
 if (copyPythonBtn) {
-  copyPythonBtn.addEventListener('click', () => {
+  copyPythonBtn.addEventListener('click', async () => {
     if (!selectedPath || !selectedMethod || !currentSpec) return;
 
     const operation = currentSpec.paths[selectedPath][selectedMethod.toLowerCase()];
-    
-    // Get the base URL from the spec servers if available, or just use a placeholder
+
     let baseUrl = currentSpec.servers && currentSpec.servers.length > 0 ? currentSpec.servers[0].url : "https://target-domain.com";
     if (baseUrl === "/") {
-      baseUrl = "https://" + currentSpec.info.title; // fallback
+      baseUrl = "https://" + currentSpec.info.title;
     }
-    
-    let url = baseUrl + selectedPath;
-    let headers = {
-      "User-Agent": "ShadowSchema-Replay/1.0"
+
+    const url = baseUrl + selectedPath;
+    const vaultHeaders = await resolveVaultHeaders(currentSpec);
+    const headers = {
+      "User-Agent": "ShadowSchema-Replay/1.0",
+      ...vaultHeaders,
     };
 
     let pythonScript = `import requests\nimport json\n\nurl = "${url}"\n\nheaders = ${JSON.stringify(headers, null, 4)}\n\n`;
@@ -402,11 +598,16 @@ if (copyPythonBtn) {
       payloadKwarg = ", json=payload";
     }
 
+    const vaultNote = Object.keys(vaultHeaders).length > 0
+      ? `# Auth headers auto-injected from ShadowSchema Auth Vault\n`
+      : `# No Auth Vault credentials captured yet for this session\n`;
+
+    pythonScript = vaultNote + pythonScript;
     pythonScript += `response = requests.request("${selectedMethod}", url, headers=headers${payloadKwarg})\n\nprint(f"Status: {response.status_code}")\nprint(response.text)\n`;
 
     navigator.clipboard.writeText(pythonScript).then(() => {
       const originalText = copyPythonBtn.textContent;
-      copyPythonBtn.textContent = "✅ Copied!";
+      copyPythonBtn.textContent = Object.keys(vaultHeaders).length > 0 ? "✅ Copied w/ Vault" : "✅ Copied!";
       setTimeout(() => {
         copyPythonBtn.textContent = originalText;
       }, 2000);

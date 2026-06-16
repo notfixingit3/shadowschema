@@ -95,8 +95,7 @@ func (s *SpecManager) LoadLatestOrCreate(target string) {
 
 	err := s.db.QueryRow(`SELECT id, target, ignore_rules, spec_json FROM sessions ORDER BY updated_at DESC LIMIT 1`).Scan(&id, &t, &ignore, &specJSON)
 	if err == nil && specJSON != "" {
-		doc, err := openapi3.NewLoader().LoadFromData([]byte(specJSON))
-		if err == nil {
+		if doc, ok := s.loadAndMigrateSpec(id, specJSON); ok {
 			s.doc = doc
 			s.SessionID = id
 			s.TargetDomain = t
@@ -169,7 +168,7 @@ func (s *SpecManager) saveState() {
 	}
 }
 
-func (s *SpecManager) AddWebSocket(path string) {
+func (s *SpecManager) AddWebSocket(req *http.Request, path string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -185,11 +184,56 @@ func (s *SpecManager) AddWebSocket(path string) {
 		s.doc.Paths.Set(path, pathItem)
 	}
 
-	if pathItem.Trace == nil {
-		pathItem.Trace = openapi3.NewOperation()
-		pathItem.Trace.Summary = "WebSocket Connection"
-		pathItem.Trace.Description = "Detected WebSocket upgrade on this endpoint."
+	if pathItem.Get == nil {
+		pathItem.Get = openapi3.NewOperation()
 	}
+	operation := pathItem.Get
+
+	if operation.Extensions == nil {
+		operation.Extensions = make(map[string]interface{})
+	}
+	operation.Extensions["x-websocket"] = true
+	if operation.Summary == "" {
+		operation.Summary = "WebSocket Connection"
+	}
+	if operation.Description == "" {
+		operation.Description = "Detected WebSocket upgrade on this endpoint."
+	}
+
+	for key := range req.URL.Query() {
+		exists := false
+		for _, p := range operation.Parameters {
+			if p.Value != nil && p.Value.Name == key && p.Value.In == "query" {
+				exists = true
+				break
+			}
+		}
+		if !exists {
+			param := openapi3.NewQueryParameter(key)
+			param.Schema = openapi3.NewSchemaRef("", openapi3.NewStringSchema())
+			operation.AddParameter(param)
+		}
+	}
+
+	for key := range req.Header {
+		canonical := http.CanonicalHeaderKey(key)
+		if !strings.HasPrefix(strings.ToLower(canonical), "sec-websocket-") {
+			continue
+		}
+		exists := false
+		for _, p := range operation.Parameters {
+			if p.Value != nil && p.Value.Name == canonical && p.Value.In == "header" {
+				exists = true
+				break
+			}
+		}
+		if !exists {
+			param := openapi3.NewHeaderParameter(canonical)
+			param.Schema = openapi3.NewSchemaRef("", openapi3.NewStringSchema())
+			operation.AddParameter(param)
+		}
+	}
+
 	s.saveState()
 }
 
@@ -356,9 +400,9 @@ func (s *SpecManager) StartExportServer(port string) {
 		}
 
 		s.mu.Lock()
-		data, err := json.MarshalIndent(s.doc, "", "  ")
+		data, err := s.buildExportDocument()
 		s.mu.Unlock()
-		
+
 		if err != nil {
 			http.Error(w, "Failed to marshal spec", http.StatusInternalServerError)
 			return
@@ -543,13 +587,14 @@ func (s *SpecManager) StartExportServer(port string) {
 			var ignore string
 			err := s.db.QueryRow(`SELECT target, ignore_rules, spec_json FROM sessions WHERE id = ?`, reqData.ID).Scan(&t, &ignore, &specJSON)
 			if err == nil {
-				doc, _ := openapi3.NewLoader().LoadFromData([]byte(specJSON))
-				s.doc = doc
-				s.SessionID = reqData.ID
-				s.TargetDomain = t
-				s.IgnoreRules = ignore
-				s.Discovered = make(map[string]bool)
-				_, _ = s.db.Exec(`UPDATE sessions SET updated_at = CURRENT_TIMESTAMP WHERE id = ?`, reqData.ID)
+				if doc, ok := s.loadAndMigrateSpec(reqData.ID, specJSON); ok {
+					s.doc = doc
+					s.SessionID = reqData.ID
+					s.TargetDomain = t
+					s.IgnoreRules = ignore
+					s.Discovered = make(map[string]bool)
+					_, _ = s.db.Exec(`UPDATE sessions SET updated_at = CURRENT_TIMESTAMP WHERE id = ?`, reqData.ID)
+				}
 			}
 			s.mu.Unlock()
 			w.WriteHeader(http.StatusOK)
@@ -583,12 +628,13 @@ func (s *SpecManager) StartExportServer(port string) {
 				var ignore string
 				err := s.db.QueryRow(`SELECT id, target, ignore_rules, spec_json FROM sessions ORDER BY updated_at DESC LIMIT 1`).Scan(&id, &target, &ignore, &specJSON)
 				if err == nil {
-					doc, _ := openapi3.NewLoader().LoadFromData([]byte(specJSON))
-					s.doc = doc
-					s.SessionID = id
-					s.TargetDomain = target
-					s.IgnoreRules = ignore
-					s.Discovered = make(map[string]bool)
+					if doc, ok := s.loadAndMigrateSpec(id, specJSON); ok {
+						s.doc = doc
+						s.SessionID = id
+						s.TargetDomain = target
+						s.IgnoreRules = ignore
+						s.Discovered = make(map[string]bool)
+					}
 				} else {
 					// DB empty, fallback
 					s.doc = &openapi3.T{
@@ -634,12 +680,22 @@ func (s *SpecManager) StartExportServer(port string) {
 		}
 
 		s.mu.Lock()
-		data, err := json.Marshal(s.doc)
+		sdkDoc, excluded, err := specForSDK(s.doc)
 		s.mu.Unlock()
 
 		if err != nil {
+			http.Error(w, "Failed to prepare SDK spec", http.StatusInternalServerError)
+			return
+		}
+
+		data, err := json.Marshal(sdkDoc)
+		if err != nil {
 			http.Error(w, "Failed to serialize spec", http.StatusInternalServerError)
 			return
+		}
+
+		if excluded > 0 {
+			w.Header().Set("X-ShadowSchema-WebSocket-Excluded", fmt.Sprintf("%d", excluded))
 		}
 
 		tmpDir, err := os.MkdirTemp("", "shadowschema-sdk-*")

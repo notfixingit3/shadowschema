@@ -26,6 +26,7 @@ Built for red teamers, security researchers, and systems architects who need to 
 - **Intelligent Routing Deduplication:** Aggregates variable routes through regex-driven pattern matching (UUIDs, IDs, Timestamps), drastically reducing map noise.
 - **Shadow Domains Tracking:** Automatically detects when the target client communicates with out-of-scope APIs (like CDNs or third-party telemetry) and allows you to instantly add them to your interception perimeter.
 - **Noise Cancellation:** Supports regex-based ignore rules to filter out static assets (`.png`, `.css`) or telemetry paths.
+- **WebSocket & WSS Recon:** Detects `ws://` and `wss://` upgrade handshakes, deduplicates socket paths, captures `Sec-WebSocket-*` headers and query params, reassembles fragmented frames, logs ping/pong/close control traffic, and infers evolving JSON message schemas from live text/binary payloads.
 - **Raw Payload Capture:** In addition to inferring the structural schema, ShadowSchema captures the last seen raw JSON payload for each endpoint so you can inspect actual live data alongside inferred types.
 - **Dynamic Python Replay:** Includes a one-click exporter that parses an intercepted endpoint and its last seen payload directly into a functioning Python `requests` script to immediately replicate API calls.
 - **Persistent Sessions:** Automatically stores mapped endpoints and active sessions in a local SQLite database (`shadowschema.db`) ensuring recon sessions survive shutdowns and restarts.
@@ -64,7 +65,7 @@ cd dashboard
 npm install
 npm run dev
 ```
-Navigate to `http://localhost:5173` to watch your map build itself in real time. From the dashboard you can create new Target Sessions, manage noise cancellation rules, and explore Shadow Domains.
+Navigate to `http://localhost:5173` to watch your map build itself in real time. From the dashboard you can create new Target Sessions, manage noise cancellation rules, explore Shadow Domains, and inspect WebSocket endpoints (upgrade metadata, captured frames, and inferred message schemas).
 
 ## 🎮 Usage Examples
 

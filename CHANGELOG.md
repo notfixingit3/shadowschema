@@ -4,18 +4,39 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.1.0-beta.0] - 2026-06-16
+
+### Added
+- **WebSocket / WSS Support:** Detects upgrade handshakes on target domains, maps them in the dashboard as `WS` endpoints, and tags them with `x-websocket: true` in exported OpenAPI specs.
+- **WebSocket Frame Inspection:** Taps post-101 connections to capture text/binary frames, stores recent frame history (`x-websocket-frames`), and infers evolving JSON message schemas. Supports RFC 6455 fragment reassembly, control-frame capture (ping/pong/close), binary payloads, and per-endpoint live stats (`x-websocket-stats`).
+- **Directional WebSocket Schemas:** Separate inbound (`x-websocket-message-schema-in`) and outbound (`x-websocket-message-schema-out`) payload shape inference.
+- **Legacy Migration:** Automatically migrates older `trace`-based WebSocket entries in SQLite sessions to `get` + `x-websocket` on load.
+- **SDK Safety:** OpenAPI SDK generation excludes WebSocket endpoints and reports omissions via the `X-ShadowSchema-WebSocket-Excluded` response header.
+- **Vault-Aware Replay:** `/export-map` embeds captured Auth Vault credentials (`x-shadowschema-vault`) and OpenAPI `securitySchemes`; Python replay scripts auto-inject vault headers.
+- **Auth Vault:** Automatic capture and dashboard review of `Authorization`, API keys, and session tokens from intercepted traffic.
+- **YAML Export & SDK Generation:** One-click OpenAPI YAML export and Python/TypeScript SDK zip downloads from the dashboard.
+
+### Changed
+- WebSocket endpoints use `GET` + `x-websocket` instead of overloading OpenAPI `TRACE`.
+- Dashboard WebSocket detail view shows live frame stats, a frame log, and split inbound/outbound schemas.
+
+### Fixed
+- Dashboard detail panel now scrolls back to the top when selecting a different endpoint from the sidebar.
+
+## [1.0.0] - 2026-06-16
+
 ### Added
 - **Core Engine:** Automated HTTP/HTTPS proxy using `elazarl/goproxy`.
 - **Security:** Dynamic CA generation with `crypto/x509` and automatic trust bridging.
 - **Routing:** Basic API path deduplication using regular expressions (`/{uuid}`, `/{id}`, `/{year}`).
 - **Schema Mapping:** JSON schema inference engine capable of automated type detection and recursive schema evolution.
-- **Data Persistence:** Added SQLite integration to safely persist OpenAPI specifications across restarts (`shadowschema.db`).
-- **Telemetry:** Proxy now intercepts and maps URL query parameters and custom HTTP headers automatically.
-- **UI:** Introduced a real-time, glassmorphism-styled Vite + Vanilla JS web dashboard for visualizing intercepted data dynamically.
-- **Exporting:** OpenAPI specification management with background export server running on `:38081`. Now featuring CORS support for the web dashboard.
-- **UX:** Clean logging with status code mappings and disabled reverse DNS lookups.
-- **System:** Smart availability port checking before binding.
+- **Data Persistence:** SQLite integration to persist OpenAPI specifications across restarts (`shadowschema.db`).
+- **Telemetry:** Proxy intercepts and maps URL query parameters and custom HTTP headers automatically.
+- **UI:** Real-time glassmorphism-styled Vite + Vanilla JS web dashboard.
+- **Exporting:** OpenAPI specification management with background export server on `:38081` and CORS support.
+- **Shadow Domains:** Out-of-scope domain discovery with one-click target expansion.
+- **Noise Cancellation:** Regex-based ignore rules for static assets and telemetry paths.
+- **Python Replay:** One-click copy of intercepted endpoints as Python `requests` scripts.
 
 ### Changed
 - Moved default proxy port to `:38080` and export port to `:38081` to prevent standard port collisions.
-- Added a Scooby-Doo git commit message hook.

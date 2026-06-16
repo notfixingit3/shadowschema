@@ -19,6 +19,7 @@ import (
 	"shadowschema/internal/proxy"
 	"shadowschema/internal/router"
 	"shadowschema/internal/spec"
+	wstap "shadowschema/internal/websocket"
 )
 
 var (
@@ -90,8 +91,9 @@ func main() {
 			}
 
 			if strings.ToLower(r.Header.Get("Upgrade")) == "websocket" {
-				specManager.AddWebSocket(r.URL.Path)
-				fmt.Printf("[WS]   %-6s %s\n", r.Method, r.URL.Path)
+				dedupedPath := router.DeduplicatePath(r.URL.Path)
+				specManager.AddWebSocket(r, dedupedPath)
+				fmt.Printf("[WS]   %-6s %s -> %s\n", r.Method, r.URL.Path, dedupedPath)
 				return r, nil
 			}
 
@@ -104,6 +106,21 @@ func main() {
 	p.OnResponse(condition).DoFunc(
 		func(resp *http.Response, ctx *goproxy.ProxyCtx) *http.Response {
 			if resp == nil || resp.Body == nil {
+				return resp
+			}
+
+			if wstap.IsUpgradeResponse(resp) && ctx.Req != nil {
+				dedupedPath := router.DeduplicatePath(ctx.Req.URL.Path)
+				if rw, ok := resp.Body.(io.ReadWriter); ok {
+					resp.Body = wstap.NewFrameTap(rw, func(direction string, opcode byte, payload []byte, info wstap.FrameInfo) {
+						specManager.AddWebSocketFrame(dedupedPath, direction, opcode, payload, info.Fragments)
+						fragNote := ""
+						if info.Fragments > 1 {
+							fragNote = fmt.Sprintf(", %d frags", info.Fragments)
+						}
+						fmt.Printf("[WS]   %-3s  %s (%s, %d bytes%s)\n", strings.ToUpper(direction), dedupedPath, wstap.OpcodeName(opcode), len(payload), fragNote)
+					})
+				}
 				return resp
 			}
 
