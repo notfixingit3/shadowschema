@@ -1,0 +1,12 @@
+.git
+.github
+dashboard/node_modules
+dashboard/dist
+dashboard/.vite
+certs
+shadowschema.db
+shadowschema
+deploy
+*.md
+logo.jpg
+THIRDPARTY.md

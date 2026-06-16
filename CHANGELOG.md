@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.1.0-beta.4] - 2026-06-16
+
+### Added
+- **Docker CI:** Publishes `ghcr.io/notfixingit3/shadowschema:beta` and `shadowschema-dashboard:beta` on every push to `dev`.
+- **Production Dockerfiles:** Multi-stage proxy image (pre-built Go binary + Node for SDK generation) and static dashboard image (Vite build + nginx).
+
+### Changed
+- preview deployment now pulls GHCR `:beta` images instead of compiling with `go run` on the server.
+- Dashboard preview serves a production Vite build instead of the Vite dev server.
+
 ## [1.1.0-beta.3] - 2026-06-16
 
 ### Added

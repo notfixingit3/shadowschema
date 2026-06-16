@@ -27,6 +27,7 @@ To get started locally:
 - **Export API / spec logic:** Add tests in `internal/spec/`. Use `newTestSpecManager(t, target)` from `testutil_test.go` so each test gets an isolated SQLite database in a temp directory.
 - **SDK generation:** Tests that call `npx` should skip gracefully when the tool or network is unavailable (`t.Skip`).
 - **Before a release:** Update `CHANGELOG.md`, bump the version in `dashboard/index.html`, and tag with `v*.*.*` to trigger the GitHub release workflow.
+- **preview preview:** Pushes to `dev` publish `:beta` images via `.github/workflows/docker.yml`. On the server, run `docker compose pull && docker compose up -d` in `/opt/stacks/shadowschema_preview`.
 
 ### Code of Conduct
 
