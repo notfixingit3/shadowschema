@@ -37,32 +37,10 @@ func isPortAvailable(port string) bool {
 	return true
 }
 
-func main() {
-	flag.Parse()
-
-	if !isPortAvailable(*port) {
-		log.Fatalf("Proxy port %s is already in use or unavailable\n", *port)
-	}
-	if !isPortAvailable(*exportPort) {
-		log.Fatalf("Export port %s is already in use or unavailable\n", *exportPort)
-	}
-
-	// 1. Initialize CA
-	if err := proxy.InitCA("certs"); err != nil {
-		log.Fatalf("Failed to initialize CA: %v\n", err)
-	}
-
-	// 2. Initialize Spec Manager
-	specManager := spec.NewSpecManager(*targetDomain)
-
-	// Start export server in background
-	go specManager.StartExportServer(*exportPort)
-
-	// 3. Initialize the proxy
+func newProxyServer(specManager *spec.SpecManager) *goproxy.ProxyHttpServer {
 	p := goproxy.NewProxyHttpServer()
-	p.Verbose = false // Keep false to maintain clean terminal alignment
+	p.Verbose = false
 
-	// Ensure we MITM all HTTPS requests dynamically based on target
 	p.OnRequest().HandleConnectFunc(func(host string, ctx *goproxy.ProxyCtx) (*goproxy.ConnectAction, string) {
 		if specManager.IsTarget(host) {
 			return goproxy.MitmConnect, host
@@ -71,18 +49,14 @@ func main() {
 		return goproxy.OkConnect, host
 	})
 
-	// Filter traffic: Only intercept the target domains dynamically
 	condition := goproxy.ReqConditionFunc(func(req *http.Request, ctx *goproxy.ProxyCtx) bool {
 		return specManager.IsTarget(req.URL.Host) || specManager.IsTarget(req.Host)
 	})
 
-	// Handle Requests
 	p.OnRequest(condition).DoFunc(
 		func(r *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
-			// Force uncompressed responses so we can read the JSON bodies
 			r.Header.Del("Accept-Encoding")
-			
-			// Vault Token Snatching
+
 			authHeaders := []string{"Authorization", "X-Api-Key", "X-Auth-Token", "Session-Token"}
 			for _, h := range authHeaders {
 				if val := r.Header.Get(h); val != "" {
@@ -97,12 +71,10 @@ func main() {
 				return r, nil
 			}
 
-			// Clean terminal output - Method and Path, aligned
 			fmt.Printf("[REQ]  %-6s %s\n", r.Method, r.URL.Path)
 			return r, nil
 		})
 
-	// Handle Responses
 	p.OnResponse(condition).DoFunc(
 		func(resp *http.Response, ctx *goproxy.ProxyCtx) *http.Response {
 			if resp == nil || resp.Body == nil {
@@ -124,24 +96,45 @@ func main() {
 				return resp
 			}
 
-			// Read body for schema parsing
 			bodyBytes, err := io.ReadAll(resp.Body)
 			if err == nil {
-				// Reassign body so the client still receives it
 				resp.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
 				dedupedPath := router.DeduplicatePath(ctx.Req.URL.Path)
-
-				// Clean terminal output - Status code, aligned
 				fmt.Printf("[RESP] %-6d %s -> %s\n", resp.StatusCode, ctx.Req.URL.Path, dedupedPath)
 
-				// Send ctx.Req to spec manager
 				if resp.StatusCode >= 200 && resp.StatusCode < 300 && len(bodyBytes) > 0 {
 					specManager.AddEndpoint(ctx.Req, dedupedPath, bodyBytes)
 				}
 			}
 			return resp
 		})
+
+	return p
+}
+
+func main() {
+	flag.Parse()
+
+	if !isPortAvailable(*port) {
+		log.Fatalf("Proxy port %s is already in use or unavailable\n", *port)
+	}
+	if !isPortAvailable(*exportPort) {
+		log.Fatalf("Export port %s is already in use or unavailable\n", *exportPort)
+	}
+
+	// 1. Initialize CA
+	if err := proxy.InitCA("certs"); err != nil {
+		log.Fatalf("Failed to initialize CA: %v\n", err)
+	}
+
+	// 2. Initialize Spec Manager
+	specManager := spec.NewSpecManager(*targetDomain)
+
+	// Start export server in background
+	go specManager.StartExportServer(*exportPort)
+
+	p := newProxyServer(specManager)
 
 	// Handle graceful shutdown
 	c := make(chan os.Signal, 1)

@@ -6,7 +6,7 @@ import (
 )
 
 func TestBuildExportDocumentIncludesVault(t *testing.T) {
-	sm := NewSpecManager("example.com")
+	sm := newTestSpecManager(t, "example.com")
 	sm.SaveVaultCredential("Authorization", "Bearer test-token")
 	sm.SaveVaultCredential("X-Api-Key", "secret-key")
 

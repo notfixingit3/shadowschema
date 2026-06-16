@@ -3,6 +3,8 @@ package spec
 import (
 	"fmt"
 	"net/http"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -10,7 +12,7 @@ import (
 )
 
 func TestSpecManagerAddEndpoint(t *testing.T) {
-	sm := NewSpecManager("example.com")
+	sm := newTestSpecManager(t, "example.com")
 
 	req1, _ := http.NewRequest(http.MethodGet, "http://example.com/api/users", nil)
 	sm.AddEndpoint(req1, "/api/users", []byte(`{"id": 1, "name": "Alice"}`))
@@ -45,7 +47,7 @@ func TestSpecManagerAddEndpoint(t *testing.T) {
 }
 
 func TestSpecManagerAddWebSocket(t *testing.T) {
-	sm := NewSpecManager("example.com")
+	sm := newTestSpecManager(t, "example.com")
 
 	req, _ := http.NewRequest(http.MethodGet, "http://example.com/ws/chat/550e8400-e29b-41d4-a716-446655440000?token=abc123", nil)
 	req.Header.Set("Upgrade", "websocket")
@@ -91,7 +93,7 @@ func TestSpecManagerAddWebSocket(t *testing.T) {
 }
 
 func TestSpecManagerAddWebSocketFrame(t *testing.T) {
-	sm := NewSpecManager("example.com")
+	sm := newTestSpecManager(t, "example.com")
 	path := fmt.Sprintf("/ws/frame-capture-%d", time.Now().UnixNano())
 
 	req, _ := http.NewRequest(http.MethodGet, "http://example.com"+path, nil)
@@ -135,6 +137,121 @@ func TestSpecManagerAddWebSocketFrame(t *testing.T) {
 	}
 	if websocketStatValue(stats, "fragmented") != 1 {
 		t.Fatalf("expected 1 fragmented message in stats, got %#v", stats)
+	}
+}
+
+func TestAddEndpointIgnoresStaticAssets(t *testing.T) {
+	sm := newTestSpecManager(t, "example.com")
+
+	req, _ := http.NewRequest(http.MethodGet, "http://example.com/static/logo.png", nil)
+	sm.AddEndpoint(req, "/static/logo.png", []byte(`fake image bytes`))
+
+	if sm.doc.Paths.Find("/static/logo.png") != nil {
+		t.Fatalf("expected static asset path to be ignored")
+	}
+}
+
+func TestAddEndpointSupportsPOSTMethod(t *testing.T) {
+	sm := newTestSpecManager(t, "example.com")
+
+	req, _ := http.NewRequest(http.MethodPost, "http://example.com/api/items", nil)
+	sm.AddEndpoint(req, "/api/items", []byte(`{"id": 42}`))
+
+	pathItem := sm.doc.Paths.Find("/api/items")
+	if pathItem == nil || pathItem.Post == nil {
+		t.Fatalf("expected POST operation for /api/items")
+	}
+}
+
+func TestAddEndpointStoresNonJSONPayload(t *testing.T) {
+	sm := newTestSpecManager(t, "example.com")
+
+	req, _ := http.NewRequest(http.MethodGet, "http://example.com/api/raw", nil)
+	sm.AddEndpoint(req, "/api/raw", []byte(`plain text response`))
+
+	pathItem := sm.doc.Paths.Find("/api/raw")
+	if pathItem == nil || pathItem.Get == nil {
+		t.Fatalf("expected GET operation for /api/raw")
+	}
+
+	payload, ok := pathItem.Get.Extensions["x-last-payload"].(string)
+	if !ok || payload != "plain text response" {
+		t.Fatalf("expected string x-last-payload, got %#v", pathItem.Get.Extensions["x-last-payload"])
+	}
+}
+
+func TestAddEndpointCapturesQueryAndHeaderParams(t *testing.T) {
+	sm := newTestSpecManager(t, "example.com")
+
+	req, _ := http.NewRequest(http.MethodGet, "http://example.com/api/search?q=shadow&limit=10", nil)
+	req.Header.Set("X-Request-Id", "abc-123")
+	sm.AddEndpoint(req, "/api/search", []byte(`{"results":[]}`))
+
+	pathItem := sm.doc.Paths.Find("/api/search")
+	if pathItem == nil || pathItem.Get == nil {
+		t.Fatalf("expected GET operation for /api/search")
+	}
+
+	params := make(map[string]string)
+	for _, p := range pathItem.Get.Parameters {
+		if p.Value != nil {
+			params[p.Value.Name] = p.Value.In
+		}
+	}
+
+	if params["q"] != "query" {
+		t.Fatalf("expected query param q, got %#v", params)
+	}
+	if params["limit"] != "query" {
+		t.Fatalf("expected query param limit, got %#v", params)
+	}
+	if params["X-Request-Id"] != "header" {
+		t.Fatalf("expected X-Request-Id header param, got %#v", params)
+	}
+}
+
+func TestIsTargetMatchesCommaSeparatedDomains(t *testing.T) {
+	sm := newTestSpecManager(t, "example.com,api.example.com")
+
+	if !sm.IsTarget("api.example.com:443") {
+		t.Fatalf("expected api.example.com to match target list")
+	}
+	if sm.IsTarget("unrelated.io") {
+		t.Fatalf("expected unrelated.io not to match target list")
+	}
+}
+
+func TestAddDiscoveredDomainDeduplicatesHosts(t *testing.T) {
+	sm := newTestSpecManager(t, "example.com")
+
+	sm.AddDiscoveredDomain("new.example.com:443")
+	sm.AddDiscoveredDomain("new.example.com:8443")
+
+	if len(sm.Discovered) != 1 {
+		t.Fatalf("expected 1 discovered host, got %d", len(sm.Discovered))
+	}
+	if !sm.Discovered["new.example.com"] {
+		t.Fatalf("expected new.example.com to be discovered")
+	}
+}
+
+func TestExportJSONWritesSpecFile(t *testing.T) {
+	sm := newTestSpecManager(t, "example.com")
+
+	req, _ := http.NewRequest(http.MethodGet, "http://example.com/api/ping", nil)
+	sm.AddEndpoint(req, "/api/ping", []byte(`{"ok":true}`))
+
+	filename := "openapi-test.json"
+	if err := sm.ExportJSON(filename); err != nil {
+		t.Fatalf("ExportJSON failed: %v", err)
+	}
+
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		t.Fatalf("failed to read exported file: %v", err)
+	}
+	if !strings.Contains(string(data), "/api/ping") {
+		t.Fatalf("expected exported spec to include /api/ping, got %q", string(data))
 	}
 }
 

@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.1.0-beta.1] - 2026-06-16
+
+### Added
+- **Proxy integration tests:** `main_test.go` covers port availability, JSON interception, vault capture, WebSocket upgrade registration, and discovered-domain tracking through the live MITM proxy.
+- **Export API test coverage:** HTTP tests for session list/create/switch/delete, add-target, discovered domains, YAML export, CORS preflight, and SDK zip generation.
+- **Spec manager unit tests:** Ignore rules, HTTP methods, non-JSON payloads, query/header capture, target matching, and `ExportJSON` file output.
+- **Isolated test databases:** Spec and main tests run in per-test temp directories to avoid polluting `./shadowschema.db`.
+
+### Changed
+- Extracted `newProxyServer()` from `main()` so the proxy pipeline is testable without starting the full process.
+- SDK generation moved to `internal/spec/sdk.go` with allowlisted languages and root-scoped zip reads via `os.OpenRoot`.
+
+### Security
+- CI now enforces `go vet` and `gosec` on every push and PR.
+- SDK zip generation hardened against path traversal; generated files use `0600` permissions.
+
 ## [1.1.0-beta.0] - 2026-06-16
 
 ### Added

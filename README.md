@@ -34,7 +34,7 @@ Built for red teamers, security researchers, and systems architects who need to 
 
 ## 🛠️ Infrastructure Requirements
 
-- **Runtime:** Go 1.18+ (Backend) and Node.js (Dashboard)
+- **Runtime:** Go 1.21+ with CGO enabled (Backend) and Node.js (Dashboard)
 - **Privileges:** Root CA (`certs/ca.crt`) installation capabilities to satisfy client-side SSL validation constraints.
 
 ## 🚀 Deployment & Installation
@@ -121,6 +121,36 @@ curl -s http://localhost:38081/export-map
 ```
 
 Alternatively, dispatch a `Ctrl+C` interrupt. ShadowSchema will catch the signal, perform a graceful shutdown, and dump the final footprint directly to `openapi.json` in your current working directory.
+
+### Export API Endpoints
+
+The background export server on `:38081` powers the dashboard and CLI tooling:
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/export-map` | GET | Live OpenAPI spec (JSON or `?format=yaml`) |
+| `/vault` | GET | Captured auth credentials |
+| `/discovered` | GET | Out-of-scope domains seen via CONNECT |
+| `/sessions` | GET, POST | List or create recon sessions |
+| `/sessions/switch` | POST | Activate a saved session |
+| `/sessions/delete` | POST | Delete a session |
+| `/sessions/add-target` | POST | Append a domain to the active target list |
+| `/generate-sdk` | POST | Generate a Python or TypeScript SDK zip |
+
+## 🧪 Testing
+
+ShadowSchema ships with unit and integration tests across the proxy engine, export API, and schema inference pipeline.
+
+```bash
+# Full suite (CGO required for SQLite)
+CGO_ENABLED=1 go test ./...
+
+# Static analysis (enforced in CI)
+go vet ./...
+gosec ./...
+```
+
+Coverage is strongest in `internal/router` (100%), `internal/spec` (~73%), and `main` proxy integration tests. SDK generation tests skip automatically when `npx` is unavailable.
 
 ## 🤝 Contributing
 
