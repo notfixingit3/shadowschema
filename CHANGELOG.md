@@ -9,7 +9,10 @@ All notable changes to this project will be documented in this file.
 - **Security:** Dynamic CA generation with `crypto/x509` and automatic trust bridging.
 - **Routing:** Basic API path deduplication using regular expressions (`/{uuid}`, `/{id}`, `/{year}`).
 - **Schema Mapping:** JSON schema inference engine capable of automated type detection and recursive schema evolution.
-- **Exporting:** OpenAPI specification management with background export server running on `:38081`.
+- **Data Persistence:** Added SQLite integration to safely persist OpenAPI specifications across restarts (`shadowschema.db`).
+- **Telemetry:** Proxy now intercepts and maps URL query parameters and custom HTTP headers automatically.
+- **UI:** Introduced a real-time, glassmorphism-styled Vite + Vanilla JS web dashboard for visualizing intercepted data dynamically.
+- **Exporting:** OpenAPI specification management with background export server running on `:38081`. Now featuring CORS support for the web dashboard.
 - **UX:** Clean logging with status code mappings and disabled reverse DNS lookups.
 - **System:** Smart availability port checking before binding.
 

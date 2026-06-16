@@ -23,6 +23,8 @@ Built for red teamers, security researchers, and systems architects who need to 
 - **Deep TLS Inspection:** Deploys a dynamically generated local Certificate Authority (CA) on startup, effortlessly bypassing HTTPS encryption to inspect application layers.
 - **Heuristic Schema Inference:** Parses intercepted JSON telemetry recursively, performing automated type detection and bridging schema mutations iteratively.
 - **Intelligent Routing Deduplication:** Aggregates variable routes through regex-driven pattern matching (UUIDs, IDs, Timestamps), drastically reducing map noise.
+- **Comprehensive Footprinting:** Actively intercepts and maps custom request headers and query parameters to generate a highly accurate OpenAPI spec.
+- **State Persistence:** Automatically stores mapped endpoints in a local SQLite database (`shadowschema.db`) ensuring recon sessions survive shutdowns and restarts.
 - **Ghost Logging:** Maintains an ultra-clean, noise-free terminal footprint with aligned status maps and disabled reverse DNS lookups.
 - **Asynchronous Extraction:** Exfiltrates the mapped OpenAPI state gracefully upon system interrupt (`SIGTERM`) or via a clandestine, background API extraction node.
 
@@ -64,7 +66,19 @@ While the proxy actively intercepts and builds the map, you can extract the live
 curl -s http://localhost:38081/export-map
 ```
 
-Alternatively, dispatch a `Ctrl+C` interrupt. ShadowSchema will catch the signal, perform a graceful shutdown, and dump the final footprint directly to `openapi.json` in your current working directory.
+	Alternatively, dispatch a `Ctrl+C` interrupt. ShadowSchema will catch the signal, perform a graceful shutdown, and dump the final footprint directly to `openapi.json` in your current working directory.
+
+## 🖥️ Live Visualization Dashboard
+
+ShadowSchema comes bundled with a sleek, real-time visualization dashboard that polls your proxy's telemetry and visualizes the generated OpenAPI spec on the fly. 
+
+To start the dashboard:
+```bash
+cd dashboard
+npm install
+npm run dev
+```
+Navigate to the provided localhost URL (usually `http://localhost:5173`) to watch your map build itself in real time.
 
 ## ⚖️ Legal Disclaimer
 
