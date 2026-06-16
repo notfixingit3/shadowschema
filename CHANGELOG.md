@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.1.0-beta.7] - 2026-06-16
+
+### Fixed
+- PostgreSQL driver registration: use `pgx` stdlib driver name so Docker/CI smoke tests connect successfully.
+- Gosec G706 log-injection finding on SQLite path logging.
+- CI workflow still required CGO/gcc after the SQLite driver swap.
+
 ## [1.1.0-beta.6] - 2026-06-16
 
 ### Added

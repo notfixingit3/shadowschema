@@ -53,9 +53,9 @@ Pre-built images are published to [GitHub Container Registry](https://github.com
 |-----|----------------|
 | `:beta`, `:dev` | Every push to `dev` |
 | `:latest`, `:main` | Every push to `main` |
-| `:v1.1.0-beta.6` | Git tags (semver) |
+| `:v1.1.0-beta.7` | Git tags (semver) |
 
-Pin a release with `SHADOWSCHEMA_IMAGE=ghcr.io/notfixingit3/shadowschema:v1.1.0-beta.6` (see `.env.example`).
+Pin a release with `SHADOWSCHEMA_IMAGE=ghcr.io/notfixingit3/shadowschema:v1.1.0-beta.7` (see `.env.example`).
 
 ## 🚀 Deployment & Installation
 

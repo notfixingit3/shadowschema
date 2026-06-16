@@ -14,6 +14,7 @@ import (
 )
 
 const (
+	sqlDriverPGX   = "pgx"
 	driverPostgres = "postgres"
 	driverSQLite   = "sqlite"
 )
@@ -26,7 +27,7 @@ func openDatabase() (*sql.DB, string, error) {
 }
 
 func openPostgres(dsn string) (*sql.DB, string, error) {
-	db, err := sql.Open(driverPostgres, dsn)
+	db, err := sql.Open(sqlDriverPGX, dsn)
 	if err != nil {
 		return nil, "", fmt.Errorf("open postgres: %w", err)
 	}
@@ -54,9 +55,9 @@ func openPostgres(dsn string) (*sql.DB, string, error) {
 }
 
 func openSQLite() (*sql.DB, string, error) {
-	path := strings.TrimSpace(os.Getenv("SHADOWSCHEMA_DB_PATH"))
-	if path == "" {
-		path = "./shadowschema.db"
+	path, err := sqliteDBPath()
+	if err != nil {
+		return nil, "", err
 	}
 
 	db, err := sql.Open(driverSQLite, path)
@@ -69,8 +70,19 @@ func openSQLite() (*sql.DB, string, error) {
 		return nil, "", err
 	}
 
-	log.Printf("[INFO] Using SQLite database at %s", path)
+	log.Printf("[INFO] Using SQLite database at %q", path)
 	return db, driverSQLite, nil
+}
+
+func sqliteDBPath() (string, error) {
+	path := strings.TrimSpace(os.Getenv("SHADOWSCHEMA_DB_PATH"))
+	if path == "" {
+		return "./shadowschema.db", nil
+	}
+	if strings.ContainsAny(path, "\r\n\x00") {
+		return "", fmt.Errorf("invalid sqlite path")
+	}
+	return path, nil
 }
 
 func initPostgresSchema(db *sql.DB) error {
