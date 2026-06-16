@@ -74,6 +74,46 @@ body {
   box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
 }
 
+.glass-input {
+  background: rgba(0,0,0,0.3);
+  border: 1px solid var(--glass-border);
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  font-family: var(--font-family);
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.glass-input:focus {
+  border-color: var(--accent-cyan);
+}
+
+.glass-btn {
+  background: rgba(255,255,255,0.1);
+  border: 1px solid var(--glass-border);
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: var(--font-family);
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.glass-btn:hover {
+  background: rgba(255,255,255,0.2);
+}
+
+.glass-btn.primary {
+  background: var(--accent-purple);
+  border-color: transparent;
+}
+
+.glass-btn.primary:hover {
+  background: #9d4edd;
+}
+
 .app-container {
   display: flex;
   flex-direction: column;
@@ -101,12 +141,20 @@ body {
   text-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
 }
 
+.session-controls {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
 .status-indicator {
   display: flex;
   align-items: center;
   gap: 0.75rem;
   font-weight: 600;
   font-size: 0.9rem;
+  width: 200px;
+  justify-content: flex-end;
 }
 
 .pulse {
@@ -140,7 +188,7 @@ body {
   display: flex;
   flex: 1;
   gap: 1.5rem;
-  min-height: 0; /* Important for scroll */
+  min-height: 0;
 }
 
 .sidebar {
@@ -326,4 +374,39 @@ pre {
   font-family: 'Menlo', 'Monaco', monospace;
   font-size: 0.9rem;
   color: #a5b4fc;
+}
+
+/* Modal Styles */
+.modal {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  backdrop-filter: blur(4px);
+}
+
+.modal-content {
+  padding: 2rem;
+  border-radius: 16px;
+  width: 400px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  animation: fadeIn 0.2s ease;
+}
+
+.modal-content h3 {
+  color: var(--accent-cyan);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  margin-top: 1rem;
 }

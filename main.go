@@ -51,7 +51,7 @@ func main() {
 	}
 
 	// 2. Initialize Spec Manager
-	specManager := spec.NewSpecManager()
+	specManager := spec.NewSpecManager(*targetDomain)
 
 	// Start export server in background
 	go specManager.StartExportServer(*exportPort)
@@ -63,8 +63,12 @@ func main() {
 	// Ensure we MITM all HTTPS requests
 	p.OnRequest().HandleConnect(goproxy.AlwaysMitm)
 
-	// Filter traffic: Only intercept the target domain
-	condition := goproxy.ReqHostMatches(regexp.MustCompile(fmt.Sprintf(`.*%s.*`, regexp.QuoteMeta(*targetDomain))))
+	// Filter traffic: Only intercept the target domain dynamically
+	condition := goproxy.ReqConditionFunc(func(req *http.Request, ctx *goproxy.ProxyCtx) bool {
+		target := specManager.GetTarget()
+		matched, _ := regexp.MatchString(fmt.Sprintf(`.*%s.*`, regexp.QuoteMeta(target)), req.URL.Host)
+		return matched
+	})
 
 	// Handle Requests
 	p.OnRequest(condition).DoFunc(
@@ -114,6 +118,6 @@ func main() {
 		os.Exit(0)
 	}()
 
-	fmt.Printf("Starting MITM API Mapper on %s targeting %s...\n", *port, *targetDomain)
+	fmt.Printf("Starting MITM API Mapper on %s (Default target: %s)\n", *port, *targetDomain)
 	log.Fatal(http.ListenAndServe(*port, p))
 }

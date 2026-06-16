@@ -6,7 +6,7 @@ import (
 )
 
 func TestSpecManagerAddEndpoint(t *testing.T) {
-	sm := NewSpecManager()
+	sm := NewSpecManager("example.com")
 
 	req1, _ := http.NewRequest(http.MethodGet, "http://example.com/api/users", nil)
 	sm.AddEndpoint(req1, "/api/users", []byte(`{"id": 1, "name": "Alice"}`))

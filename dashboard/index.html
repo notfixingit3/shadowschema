@@ -18,6 +18,12 @@
         <div class="logo">
           <span class="neon-text">SHADOW</span>SCHEMA
         </div>
+        
+        <div class="session-controls">
+          <select id="session-select" class="glass-input"></select>
+          <button id="new-session-btn" class="glass-btn">New Target</button>
+        </div>
+
         <div class="status-indicator">
           <div class="pulse"></div>
           <span id="connection-status">Connecting...</span>
@@ -57,6 +63,20 @@
         </section>
       </main>
     </div>
+
+    <!-- Modal -->
+    <div id="new-session-modal" class="modal hidden">
+      <div class="modal-content glass">
+        <h3>Deploy New Interceptor</h3>
+        <input type="text" id="ns-name" class="glass-input" placeholder="Session Name (e.g. Staging Mapping)">
+        <input type="text" id="ns-target" class="glass-input" placeholder="Target Domain (e.g. staging.example.com)">
+        <div class="modal-actions">
+          <button id="ns-cancel" class="glass-btn secondary">Abort</button>
+          <button id="ns-create" class="glass-btn primary">Deploy</button>
+        </div>
+      </div>
+    </div>
+
     <script type="module" src="./main.js"></script>
   </body>
 </html>

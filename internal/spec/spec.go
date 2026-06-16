@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	_ "github.com/mattn/go-sqlite3"
@@ -15,47 +16,80 @@ import (
 )
 
 type SpecManager struct {
-	mu  sync.Mutex
-	doc *openapi3.T
-	db  *sql.DB
+	mu           sync.Mutex
+	doc          *openapi3.T
+	db           *sql.DB
+	SessionID    int
+	TargetDomain string
 }
 
-func NewSpecManager() *SpecManager {
+type SessionMeta struct {
+	ID        int       `json:"id"`
+	Name      string    `json:"name"`
+	Target    string    `json:"target"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func NewSpecManager(defaultTarget string) *SpecManager {
 	db, err := sql.Open("sqlite3", "./shadowschema.db")
 	if err != nil {
 		log.Fatalf("Failed to open sqlite database: %v", err)
 	}
 
-	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS state (id INTEGER PRIMARY KEY, spec_json TEXT)`)
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS sessions (
+		id INTEGER PRIMARY KEY AUTOINCREMENT, 
+		name TEXT, 
+		target TEXT, 
+		spec_json TEXT, 
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	)`)
 	if err != nil {
-		log.Fatalf("Failed to create state table: %v", err)
+		log.Fatalf("Failed to create sessions table: %v", err)
 	}
 
-	var doc *openapi3.T
+	sm := &SpecManager{db: db}
+	sm.LoadLatestOrCreate(defaultTarget)
+	return sm
+}
+
+func (s *SpecManager) LoadLatestOrCreate(target string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	var specJSON string
-	err = db.QueryRow(`SELECT spec_json FROM state WHERE id = 1`).Scan(&specJSON)
+	var id int
+	var t string
+
+	err := s.db.QueryRow(`SELECT id, target, spec_json FROM sessions ORDER BY updated_at DESC LIMIT 1`).Scan(&id, &t, &specJSON)
 	if err == nil && specJSON != "" {
-		doc, err = openapi3.NewLoader().LoadFromData([]byte(specJSON))
-		if err != nil {
-			log.Printf("[WARN] Failed to load spec from database: %v. Starting fresh.", err)
+		doc, err := openapi3.NewLoader().LoadFromData([]byte(specJSON))
+		if err == nil {
+			s.doc = doc
+			s.SessionID = id
+			s.TargetDomain = t
+			return
 		}
 	}
 
-	if doc == nil {
-		doc = &openapi3.T{
-			OpenAPI: "3.0.0",
-			Info: &openapi3.Info{
-				Title:   "ShadowSchema Auto-Generated API",
-				Version: "1.0.0",
-			},
-			Paths: openapi3.NewPaths(),
-		}
+	// Create new
+	s.doc = &openapi3.T{
+		OpenAPI: "3.0.0",
+		Info: &openapi3.Info{Title: "ShadowSchema Auto-Generated API", Version: "1.0.0"},
+		Paths: openapi3.NewPaths(),
 	}
+	s.TargetDomain = target
+	data, _ := json.Marshal(s.doc)
+	res, err := s.db.Exec(`INSERT INTO sessions (name, target, spec_json) VALUES (?, ?, ?)`, "Initial Run", target, string(data))
+	if err == nil {
+		newID, _ := res.LastInsertId()
+		s.SessionID = int(newID)
+	}
+}
 
-	return &SpecManager{
-		doc: doc,
-		db:  db,
-	}
+func (s *SpecManager) GetTarget() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.TargetDomain
 }
 
 func (s *SpecManager) saveState() {
@@ -64,7 +98,7 @@ func (s *SpecManager) saveState() {
 		log.Printf("[ERROR] Failed to marshal spec for DB: %v", err)
 		return
 	}
-	_, err = s.db.Exec(`INSERT OR REPLACE INTO state (id, spec_json) VALUES (1, ?)`, string(data))
+	_, err = s.db.Exec(`UPDATE sessions SET spec_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, string(data), s.SessionID)
 	if err != nil {
 		log.Printf("[ERROR] Failed to save state to DB: %v", err)
 	}
@@ -74,7 +108,6 @@ func (s *SpecManager) AddEndpoint(req *http.Request, path string, body []byte) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Parse body to schema
 	newSchema := parser.ParseResponseBody(body)
 
 	pathItem := s.doc.Paths.Find(path)
@@ -118,7 +151,6 @@ func (s *SpecManager) AddEndpoint(req *http.Request, path string, body []byte) {
 		operation.Responses = openapi3.NewResponses()
 	}
 
-	// Map query parameters
 	for key := range req.URL.Query() {
 		exists := false
 		for _, p := range operation.Parameters {
@@ -134,7 +166,6 @@ func (s *SpecManager) AddEndpoint(req *http.Request, path string, body []byte) {
 		}
 	}
 
-	// Map headers (ignoring standard browser/proxy headers)
 	ignoreHeaders := map[string]bool{
 		"Host": true, "Connection": true, "Accept-Encoding": true, "User-Agent": true,
 		"Accept": true, "Accept-Language": true, "Sec-Fetch-Mode": true, "Sec-Fetch-Site": true,
@@ -160,7 +191,6 @@ func (s *SpecManager) AddEndpoint(req *http.Request, path string, body []byte) {
 		}
 	}
 
-	// Use "200" as the default response for schema
 	resp := operation.Responses.Value("200")
 	if resp == nil {
 		mediaType := openapi3.NewMediaType()
@@ -169,7 +199,6 @@ func (s *SpecManager) AddEndpoint(req *http.Request, path string, body []byte) {
 		respValue := openapi3.NewResponse().WithDescription("Auto-generated response").WithContent(content)
 		operation.Responses.Set("200", &openapi3.ResponseRef{Value: respValue})
 	} else {
-		// Merge schema
 		content := resp.Value.Content.Get("application/json")
 		if content != nil && content.Schema != nil {
 			content.Schema = parser.MergeSchema(content.Schema, newSchema)
@@ -183,7 +212,6 @@ func (s *SpecManager) AddEndpoint(req *http.Request, path string, body []byte) {
 		}
 	}
 
-	// Persist the state
 	s.saveState()
 }
 
@@ -199,26 +227,121 @@ func (s *SpecManager) ExportJSON(filename string) error {
 	return os.WriteFile(filename, data, 0644)
 }
 
+func enableCORS(w http.ResponseWriter) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+}
+
 func (s *SpecManager) StartExportServer(port string) {
 	mux := http.NewServeMux()
+	
 	mux.HandleFunc("/export-map", func(w http.ResponseWriter, r *http.Request) {
-		s.mu.Lock()
-		defer s.mu.Unlock()
+		enableCORS(w)
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
 
+		s.mu.Lock()
 		data, err := json.MarshalIndent(s.doc, "", "  ")
+		s.mu.Unlock()
+		
 		if err != nil {
 			http.Error(w, "Failed to marshal spec", http.StatusInternalServerError)
 			return
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 		w.Write(data)
-		fmt.Println("[INFO] Exported OpenAPI spec via /export-map")
 	})
 
-	fmt.Printf("[INFO] Export server running on %s (try GET http://localhost%s/export-map)\n", port, port)
+	mux.HandleFunc("/sessions", func(w http.ResponseWriter, r *http.Request) {
+		enableCORS(w)
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		if r.Method == "GET" {
+			rows, err := s.db.Query(`SELECT id, name, target, updated_at FROM sessions ORDER BY updated_at DESC`)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			defer rows.Close()
+
+			var sessions []SessionMeta
+			for rows.Next() {
+				var sm SessionMeta
+				rows.Scan(&sm.ID, &sm.Name, &sm.Target, &sm.UpdatedAt)
+				sessions = append(sessions, sm)
+			}
+			
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(sessions)
+			return
+		}
+
+		if r.Method == "POST" {
+			var reqData struct {
+				Name   string `json:"name"`
+				Target string `json:"target"`
+			}
+			json.NewDecoder(r.Body).Decode(&reqData)
+			
+			if reqData.Name == "" || reqData.Target == "" {
+				http.Error(w, "Name and Target required", http.StatusBadRequest)
+				return
+			}
+
+			s.mu.Lock()
+			s.doc = &openapi3.T{
+				OpenAPI: "3.0.0",
+				Info: &openapi3.Info{Title: "ShadowSchema Auto-Generated API", Version: "1.0.0"},
+				Paths: openapi3.NewPaths(),
+			}
+			s.TargetDomain = reqData.Target
+			data, _ := json.Marshal(s.doc)
+			res, _ := s.db.Exec(`INSERT INTO sessions (name, target, spec_json) VALUES (?, ?, ?)`, reqData.Name, reqData.Target, string(data))
+			newID, _ := res.LastInsertId()
+			s.SessionID = int(newID)
+			s.mu.Unlock()
+
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+	})
+
+	mux.HandleFunc("/sessions/switch", func(w http.ResponseWriter, r *http.Request) {
+		enableCORS(w)
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		if r.Method == "POST" {
+			var reqData struct {
+				ID int `json:"id"`
+			}
+			json.NewDecoder(r.Body).Decode(&reqData)
+
+			s.mu.Lock()
+			var specJSON string
+			var t string
+			err := s.db.QueryRow(`SELECT target, spec_json FROM sessions WHERE id = ?`, reqData.ID).Scan(&t, &specJSON)
+			if err == nil {
+				doc, _ := openapi3.NewLoader().LoadFromData([]byte(specJSON))
+				s.doc = doc
+				s.SessionID = reqData.ID
+				s.TargetDomain = t
+				s.db.Exec(`UPDATE sessions SET updated_at = CURRENT_TIMESTAMP WHERE id = ?`, reqData.ID)
+			}
+			s.mu.Unlock()
+			w.WriteHeader(http.StatusOK)
+		}
+	})
+
+	fmt.Printf("[INFO] Export server running on %s\n", port)
 	http.ListenAndServe(port, mux)
 }
