@@ -66,6 +66,10 @@ curl -s http://localhost:38081/export-map
 
 Alternatively, dispatch a `Ctrl+C` interrupt. ShadowSchema will catch the signal, perform a graceful shutdown, and dump the final footprint directly to `openapi.json` in your current working directory.
 
+## 🛋️ Origin Story
+
+*Why build this?* I suffered a back injury a while back, which means I now spend a lot of time laying around with my laptop. Figuring out undocumented APIs from the couch sounded like a fun way to pass the time, so here we are!
+
 ---
 <div align="center">
 <i>"Visibility is the first step to exploitation."</i>
