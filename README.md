@@ -1,45 +1,72 @@
-# ShadowSchema
+<div align="center">
+  <pre>
+   _____ _               _               _____      _                          
+  / ____| |             | |             / ____|    | |                         
+ | (___ | |__   __ _  __| | _____      | (___   ___| |__   ___ _ __ ___   __ _ 
+  \___ \| '_ \ / _` |/ _` |/ _ \ \ /\ / /\___ \ / __| '_ \ / _ \ '_ ` _ \ / _` |
+  ____) | | | | (_| | (_| | (_) \ V  V / ____) | (__| | | |  __/ | | | | | (_| |
+ |_____/|_| |_|\__,_|\__,_|\___/ \_/\_/ |_____/ \___|_| |_|\___|_| |_| |_|\__,_|
+  </pre>
+  <p><b>Advanced API MITM Mapping & Reconnaissance Framework</b></p>
+</div>
 
-ShadowSchema is an API Man-in-the-Middle (MITM) Mapper written in Go. It intercepts HTTP and HTTPS traffic for a target domain, infers OpenAPI schemas from the JSON responses, deduplicates similar paths, and dynamically generates an OpenAPI v3.0 specification.
+---
 
-## Features
+## 👁️ Overview
 
-- **Automated MITM Proxy**: Intercepts secure traffic seamlessly using `elazarl/goproxy`.
-- **Dynamic CA Generation**: Auto-generates local Certificate Authority (CA) certificates on startup to enable HTTPS interception without manual cert creation.
-- **Path Deduplication**: Normalizes variable paths (UUIDs, Integers, Years) automatically.
-- **Schema Inference**: Parses JSON responses on the fly and builds evolving OpenAPI structures.
-- **Export Capabilities**: Dumps the spec to `openapi.json` gracefully on shutdown or via a local background server on demand.
-- **Clean Logging**: Simple, snappy, and cleanly aligned console output.
+**ShadowSchema** is a specialized, clandestine Man-in-the-Middle (MITM) proxy engineered in Go. Designed for advanced API reconnaissance, it silently intercepts target HTTP/HTTPS telemetry, deduces underlying JSON payloads, and programmatically reconstructs evolving OpenAPI 3.0 specifications on the fly.
 
-## Prerequisites
+Built for red teamers, security researchers, and systems architects who need to map undocumented endpoints in real-time.
 
-- Go 1.18+
-- The generated root CA (`certs/ca.crt`) must be trusted by your operating system or browser for full HTTPS interception.
+## ⚡ Core Capabilities
 
-## Usage
+- **Deep TLS Inspection:** Deploys a dynamically generated local Certificate Authority (CA) on startup, effortlessly bypassing HTTPS encryption to inspect application layers.
+- **Heuristic Schema Inference:** Parses intercepted JSON telemetry recursively, performing automated type detection and bridging schema mutations iteratively.
+- **Intelligent Routing Deduplication:** Aggregates variable routes through regex-driven pattern matching (UUIDs, IDs, Timestamps), drastically reducing map noise.
+- **Ghost Logging:** Maintains an ultra-clean, noise-free terminal footprint with aligned status maps and disabled reverse DNS lookups.
+- **Asynchronous Extraction:** Exfiltrates the mapped OpenAPI state gracefully upon system interrupt (`SIGTERM`) or via a clandestine, background API extraction node.
 
-Start the proxy by passing the `--target` flag:
+## 🛠️ Infrastructure Requirements
+
+- **Runtime:** Go 1.18+
+- **Privileges:** Root CA (`certs/ca.crt`) installation capabilities to satisfy client-side SSL validation constraints.
+
+## 🚀 Deployment
+
+Initiate the proxy engine and specify the target perimeter you wish to map. 
 
 ```bash
+# Initiate mapping against the target domain
 go run main.go --target=example.com
 ```
 
-### Available Flags:
+### Command Flags
 
-- `--target` (string): The target domain to intercept and map. Only this domain's traffic will be evaluated (default is `example.com`).
-- `--port` (string): Port for the MITM proxy. Default is `:38080`.
-- `--export-port` (string): Port for the OpenAPI export server. Default is `:38081`.
+| Flag | Default | Description |
+| :--- | :--- | :--- |
+| `--target` | `example.com` | The target domain perimeter to monitor and intercept. |
+| `--port` | `:38080` | Local port bound for the MITM proxy listener. |
+| `--export-port` | `:38081` | Local port bound for the background OpenAPI extraction server. |
 
-### Trusting the CA
+### 🔑 Trust Provisioning
 
-On the first run, ShadowSchema will generate a `certs/` folder with a new CA certificate (`ca.crt`) and private key. Install and trust `certs/ca.crt` on your system to avoid browser security warnings.
+Upon initial launch, ShadowSchema will forge a fresh RSA keypair and self-signed Certificate Authority within the `certs/` directory. 
+To achieve seamless HTTPS interception without triggering `ERR_CERT_AUTHORITY_INVALID` anomalies:
+1. Locate `certs/ca.crt`.
+2. Inject it into your operating system's root trust store or browser authority list.
 
-## Exporting the Spec
+## 📡 Spec Extraction
 
-While the proxy is running, you can export the currently mapped schema by hitting the export endpoint:
+While the proxy actively intercepts and builds the map, you can extract the live OpenAPI specification via the extraction node:
 
 ```bash
-curl http://localhost:38081/export-map
+# Pull the live schema payload
+curl -s http://localhost:38081/export-map
 ```
 
-When you stop the server gracefully (Ctrl+C), the schema will also automatically be written to `openapi.json` in the root directory.
+Alternatively, dispatch a `Ctrl+C` interrupt. ShadowSchema will catch the signal, perform a graceful shutdown, and dump the final footprint directly to `openapi.json` in your current working directory.
+
+---
+<div align="center">
+<i>"Visibility is the first step to exploitation."</i>
+</div>
