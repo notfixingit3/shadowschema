@@ -10,8 +10,9 @@ First off, thank you for considering contributing to ShadowSchema! It's people l
   1. Fork the repo and create your branch from `dev`.
   2. If you've added code that should be tested, add Go unit tests.
   3. Ensure the test suite passes (`go test ./...`).
-  4. Make sure your code aligns with the existing style.
-  5. Issue that pull request!
+  4. Run static checks before opening a PR: `go vet ./...` and `gosec ./...` (CI enforces both).
+  5. Make sure your code aligns with the existing style.
+  6. Issue that pull request!
 
 ### Development Setup
 

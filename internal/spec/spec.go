@@ -1,16 +1,12 @@
 package spec
 
 import (
-	"archive/zip"
-	"bytes"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -389,9 +385,23 @@ func enableCORS(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 }
 
-func (s *SpecManager) StartExportServer(port string) {
+func (s *SpecManager) ExportHandler() http.Handler {
 	mux := http.NewServeMux()
-	
+	s.mountExportRoutes(mux)
+	return mux
+}
+
+func (s *SpecManager) StartExportServer(port string) {
+	fmt.Printf("[INFO] Export server running on %s\n", port)
+	srv := &http.Server{
+		Addr:              port,
+		Handler:           s.ExportHandler(),
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+	_ = srv.ListenAndServe()
+}
+
+func (s *SpecManager) mountExportRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/export-map", func(w http.ResponseWriter, r *http.Request) {
 		enableCORS(w)
 		if r.Method == "OPTIONS" {
@@ -675,10 +685,6 @@ func (s *SpecManager) StartExportServer(port string) {
 			return
 		}
 
-		if reqData.Language == "" {
-			reqData.Language = "python"
-		}
-
 		s.mu.Lock()
 		sdkDoc, excluded, err := specForSDK(s.doc)
 		s.mu.Unlock()
@@ -698,59 +704,23 @@ func (s *SpecManager) StartExportServer(port string) {
 			w.Header().Set("X-ShadowSchema-WebSocket-Excluded", fmt.Sprintf("%d", excluded))
 		}
 
-		tmpDir, err := os.MkdirTemp("", "shadowschema-sdk-*")
+		language, err := normalizeSDKLanguage(reqData.Language)
 		if err != nil {
-			http.Error(w, "Failed to create temp dir", http.StatusInternalServerError)
-			return
-		}
-		defer os.RemoveAll(tmpDir)
-
-		specFile := filepath.Join(tmpDir, "spec.json")
-		if err := os.WriteFile(specFile, data, 0644); err != nil {
-			http.Error(w, "Failed to write spec", http.StatusInternalServerError)
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
-		outDir := filepath.Join(tmpDir, "out")
-		cmd := exec.Command("npx", "-y", "@openapitools/openapi-generator-cli", "generate", "-i", specFile, "-g", reqData.Language, "-o", outDir)
-		if out, err := cmd.CombinedOutput(); err != nil {
-			log.Printf("SDK Gen Error: %v\nOutput: %s", err, string(out))
-			http.Error(w, "Failed to generate SDK: "+string(out), http.StatusInternalServerError)
+		zipData, err := generateSDKZip(data, language)
+		if err != nil {
+			log.Printf("SDK Gen Error: %v", err)
+			http.Error(w, "Failed to generate SDK: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
-
-		// Zip the output
-		zipBuf := new(bytes.Buffer)
-		zipWriter := zip.NewWriter(zipBuf)
-
-		filepath.Walk(outDir, func(path string, info os.FileInfo, err error) error {
-			if err != nil || info.IsDir() {
-				return err
-			}
-			relPath, _ := filepath.Rel(outDir, path)
-			f, err := zipWriter.Create(relPath)
-			if err != nil {
-				return err
-			}
-			fileContent, err := os.ReadFile(path)
-			if err != nil {
-				return err
-			}
-			_, err = f.Write(fileContent)
-			return err
-		})
-		zipWriter.Close()
 
 		w.Header().Set("Content-Type", "application/zip")
-		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s_sdk.zip\"", reqData.Language))
-		w.Write(zipBuf.Bytes())
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s_sdk.zip\"", language))
+		if _, err := w.Write(zipData); err != nil {
+			log.Printf("Failed to write SDK zip response: %v", err)
+		}
 	})
-
-	fmt.Printf("[INFO] Export server running on %s\n", port)
-	srv := &http.Server{
-		Addr:              port,
-		Handler:           mux,
-		ReadHeaderTimeout: 10 * time.Second,
-	}
-	_ = srv.ListenAndServe()
 }
