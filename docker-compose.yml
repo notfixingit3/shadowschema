@@ -1,4 +1,20 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: shadowschema-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-shadowschema}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-shadowschema}
+      POSTGRES_DB: ${POSTGRES_DB:-shadowschema}
+    volumes:
+      - shadowschema-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-shadowschema} -d ${POSTGRES_DB:-shadowschema}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   nginx:
     image: nginx:1.27-alpine
     container_name: shadowschema-nginx
@@ -19,15 +35,16 @@ services:
     pull_policy: always
     container_name: shadowschema-proxy
     restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-shadowschema}:${POSTGRES_PASSWORD:-shadowschema}@postgres:5432/${POSTGRES_DB:-shadowschema}?sslmode=disable
     volumes:
-      - ./certs:/app/certs
-      - shadowschema-data:/app/data
+      - shadowschema-certs:/app/certs
     ports:
       - "38080:38080"
       - "38081:38081"
-    entrypoint: >
-      sh -c "ln -sf /app/data/shadowschema.db /app/shadowschema.db &&
-             exec /app/shadowschema"
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   dashboard:
     image: ${SHADOWSCHEMA_DASHBOARD_IMAGE:-ghcr.io/notfixingit3/shadowschema-dashboard:beta}
@@ -38,4 +55,5 @@ services:
       - "8080"
 
 volumes:
-  shadowschema-data:
+  shadowschema-postgres:
+  shadowschema-certs:

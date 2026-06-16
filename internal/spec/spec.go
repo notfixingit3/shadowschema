@@ -15,7 +15,6 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/getkin/kin-openapi/openapi3"
-	_ "github.com/mattn/go-sqlite3"
 	"shadowschema/internal/parser"
 )
 
@@ -23,6 +22,7 @@ type SpecManager struct {
 	mu           sync.Mutex
 	doc          *openapi3.T
 	db           *sql.DB
+	dbDriver     string
 	SessionID    int
 	TargetDomain string
 	IgnoreRules  string
@@ -44,38 +44,12 @@ type AuthCredential struct {
 }
 
 func NewSpecManager(defaultTarget string) *SpecManager {
-	db, err := sql.Open("sqlite3", "./shadowschema.db")
+	db, driver, err := openDatabase()
 	if err != nil {
-		log.Fatalf("Failed to open sqlite database: %v", err)
+		log.Fatalf("Failed to open database: %v", err)
 	}
 
-	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS sessions (
-		id INTEGER PRIMARY KEY AUTOINCREMENT, 
-		name TEXT, 
-		target TEXT, 
-		spec_json TEXT, 
-		ignore_rules TEXT DEFAULT '',
-		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-	)`)
-	if err != nil {
-		log.Fatalf("Failed to create sessions table: %v", err)
-	}
-
-	// Safely add ignore_rules if updating existing db
-	_, _ = db.Exec(`ALTER TABLE sessions ADD COLUMN ignore_rules TEXT DEFAULT ''`)
-
-	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS auth_vault (
-		session_id INTEGER,
-		header_name TEXT,
-		token_value TEXT,
-		first_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
-		UNIQUE(session_id, header_name, token_value)
-	)`)
-	if err != nil {
-		log.Printf("Failed to create auth_vault table: %v", err)
-	}
-
-	sm := &SpecManager{db: db, Discovered: make(map[string]bool)}
+	sm := &SpecManager{db: db, dbDriver: driver, Discovered: make(map[string]bool)}
 	sm.LoadLatestOrCreate(defaultTarget)
 	return sm
 }
@@ -89,7 +63,7 @@ func (s *SpecManager) LoadLatestOrCreate(target string) {
 	var t string
 	var ignore string
 
-	err := s.db.QueryRow(`SELECT id, target, ignore_rules, spec_json FROM sessions ORDER BY updated_at DESC LIMIT 1`).Scan(&id, &t, &ignore, &specJSON)
+	err := s.dbQueryRow(`SELECT id, target, ignore_rules, spec_json FROM sessions ORDER BY updated_at DESC LIMIT 1`).Scan(&id, &t, &ignore, &specJSON)
 	if err == nil && specJSON != "" {
 		if doc, ok := s.loadAndMigrateSpec(id, specJSON); ok {
 			s.doc = doc
@@ -110,10 +84,8 @@ func (s *SpecManager) LoadLatestOrCreate(target string) {
 	s.TargetDomain = target
 	s.IgnoreRules = "\\.(png|jpg|jpeg|webp|gif|css|js|woff|woff2|ico)$"
 	data, _ := json.Marshal(s.doc)
-	res, err := s.db.Exec(`INSERT INTO sessions (name, target, ignore_rules, spec_json) VALUES (?, ?, ?, ?)`, "Initial Run", target, s.IgnoreRules, string(data))
-	if err == nil {
-		newID, _ := res.LastInsertId()
-		s.SessionID = int(newID)
+	if newID, err := s.insertSession("Initial Run", target, s.IgnoreRules, string(data)); err == nil {
+		s.SessionID = newID
 	}
 }
 
@@ -126,7 +98,7 @@ func (s *SpecManager) GetTarget() string {
 func (s *SpecManager) SaveVaultCredential(headerName, tokenValue string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	_, _ = s.db.Exec(`INSERT OR IGNORE INTO auth_vault (session_id, header_name, token_value) VALUES (?, ?, ?)`, s.SessionID, headerName, tokenValue)
+	_ = s.saveVaultCredential(headerName, tokenValue)
 }
 
 func (s *SpecManager) IsTarget(host string) bool {
@@ -158,7 +130,7 @@ func (s *SpecManager) saveState() {
 		log.Printf("[ERROR] Failed to marshal spec for DB: %v", err)
 		return
 	}
-	_, err = s.db.Exec(`UPDATE sessions SET spec_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, string(data), s.SessionID)
+	_, err = s.dbExec(`UPDATE sessions SET spec_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, string(data), s.SessionID)
 	if err != nil {
 		log.Printf("[ERROR] Failed to save state to DB: %v", err)
 	}
@@ -444,7 +416,7 @@ func (s *SpecManager) mountExportRoutes(mux *http.ServeMux) {
 		}
 
 		if r.Method == "GET" {
-			rows, err := s.db.Query(`SELECT id, name, target, ignore_rules, updated_at FROM sessions ORDER BY updated_at DESC`)
+			rows, err := s.dbQuery(`SELECT id, name, target, ignore_rules, updated_at FROM sessions ORDER BY updated_at DESC`)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -489,9 +461,8 @@ func (s *SpecManager) mountExportRoutes(mux *http.ServeMux) {
 			s.TargetDomain = reqData.Target
 			s.IgnoreRules = reqData.Ignore
 			data, _ := json.Marshal(s.doc)
-			res, _ := s.db.Exec(`INSERT INTO sessions (name, target, ignore_rules, spec_json) VALUES (?, ?, ?, ?)`, reqData.Name, reqData.Target, reqData.Ignore, string(data))
-			newID, _ := res.LastInsertId()
-			s.SessionID = int(newID)
+			newID, _ := s.insertSession(reqData.Name, reqData.Target, reqData.Ignore, string(data))
+			s.SessionID = newID
 			s.Discovered = make(map[string]bool)
 			s.mu.Unlock()
 
@@ -526,7 +497,7 @@ func (s *SpecManager) mountExportRoutes(mux *http.ServeMux) {
 		}
 		if r.Method == "GET" {
 			s.mu.Lock()
-			rows, err := s.db.Query(`SELECT header_name, token_value, first_seen FROM auth_vault WHERE session_id = ? ORDER BY first_seen DESC`, s.SessionID)
+			rows, err := s.dbQuery(`SELECT header_name, token_value, first_seen FROM auth_vault WHERE session_id = ? ORDER BY first_seen DESC`, s.SessionID)
 			s.mu.Unlock()
 
 			if err != nil {
@@ -568,7 +539,7 @@ func (s *SpecManager) mountExportRoutes(mux *http.ServeMux) {
 			// Append to target
 			if !strings.Contains(s.TargetDomain, reqData.Domain) {
 				s.TargetDomain = s.TargetDomain + "," + reqData.Domain
-				_, _ = s.db.Exec(`UPDATE sessions SET target = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, s.TargetDomain, s.SessionID)
+				_, _ = s.dbExec(`UPDATE sessions SET target = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, s.TargetDomain, s.SessionID)
 			}
 			s.mu.Unlock()
 			w.WriteHeader(http.StatusOK)
@@ -595,7 +566,7 @@ func (s *SpecManager) mountExportRoutes(mux *http.ServeMux) {
 			var specJSON string
 			var t string
 			var ignore string
-			err := s.db.QueryRow(`SELECT target, ignore_rules, spec_json FROM sessions WHERE id = ?`, reqData.ID).Scan(&t, &ignore, &specJSON)
+			err := s.dbQueryRow(`SELECT target, ignore_rules, spec_json FROM sessions WHERE id = ?`, reqData.ID).Scan(&t, &ignore, &specJSON)
 			if err == nil {
 				if doc, ok := s.loadAndMigrateSpec(reqData.ID, specJSON); ok {
 					s.doc = doc
@@ -603,7 +574,7 @@ func (s *SpecManager) mountExportRoutes(mux *http.ServeMux) {
 					s.TargetDomain = t
 					s.IgnoreRules = ignore
 					s.Discovered = make(map[string]bool)
-					_, _ = s.db.Exec(`UPDATE sessions SET updated_at = CURRENT_TIMESTAMP WHERE id = ?`, reqData.ID)
+					_, _ = s.dbExec(`UPDATE sessions SET updated_at = CURRENT_TIMESTAMP WHERE id = ?`, reqData.ID)
 				}
 			}
 			s.mu.Unlock()
@@ -628,7 +599,7 @@ func (s *SpecManager) mountExportRoutes(mux *http.ServeMux) {
 			}
 
 			s.mu.Lock()
-			_, _ = s.db.Exec(`DELETE FROM sessions WHERE id = ?`, reqData.ID)
+			_, _ = s.dbExec(`DELETE FROM sessions WHERE id = ?`, reqData.ID)
 			
 			// If we just deleted the active session, load whatever is left or create a fallback
 			if s.SessionID == reqData.ID {
@@ -636,7 +607,7 @@ func (s *SpecManager) mountExportRoutes(mux *http.ServeMux) {
 				var id int
 				var target string
 				var ignore string
-				err := s.db.QueryRow(`SELECT id, target, ignore_rules, spec_json FROM sessions ORDER BY updated_at DESC LIMIT 1`).Scan(&id, &target, &ignore, &specJSON)
+				err := s.dbQueryRow(`SELECT id, target, ignore_rules, spec_json FROM sessions ORDER BY updated_at DESC LIMIT 1`).Scan(&id, &target, &ignore, &specJSON)
 				if err == nil {
 					if doc, ok := s.loadAndMigrateSpec(id, specJSON); ok {
 						s.doc = doc
@@ -655,9 +626,8 @@ func (s *SpecManager) mountExportRoutes(mux *http.ServeMux) {
 					s.TargetDomain = "example.com"
 					s.IgnoreRules = ""
 					data, _ := json.Marshal(s.doc)
-					res, _ := s.db.Exec(`INSERT INTO sessions (name, target, ignore_rules, spec_json) VALUES (?, ?, ?, ?)`, "Fallback", "example.com", "", string(data))
-					newID, _ := res.LastInsertId()
-					s.SessionID = int(newID)
+					newID, _ := s.insertSession("Fallback", "example.com", "", string(data))
+					s.SessionID = newID
 					s.Discovered = make(map[string]bool)
 				}
 			}

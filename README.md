@@ -31,13 +31,13 @@ Built for red teamers, security researchers, and systems architects who need to 
 - **Raw Payload Capture:** In addition to inferring the structural schema, ShadowSchema captures the last seen raw JSON payload for each endpoint so you can inspect actual live data alongside inferred types.
 - **Dynamic Python Replay:** Includes a one-click exporter that parses an intercepted endpoint and its last seen payload directly into a functioning Python `requests` script to immediately replicate API calls.
 - **SDK Generation:** One-click OpenAPI client SDK zips for Python, TypeScript, Go, and Rust via OpenAPI Generator.
-- **Persistent Sessions:** Automatically stores mapped endpoints and active sessions in a local SQLite database (`shadowschema.db`) ensuring recon sessions survive shutdowns and restarts.
+- **Persistent Sessions:** Automatically stores mapped endpoints and active sessions in PostgreSQL (Docker) or SQLite (local dev), ensuring recon sessions survive shutdowns and restarts.
 - **Progressive Web App (PWA):** Features a sleek, beautiful dashboard to manage target sessions, filter endpoints, and export specifications as JSON.
 
 ## 🛠️ Infrastructure Requirements
 
-- **Docker users:** Docker Engine with Compose v2 — no Go or Node.js required.
-- **Contributors:** Go 1.21+ with CGO enabled and Node.js 20+ for local development (see `CONTRIBUTING.md`).
+- **Docker users:** Docker Engine with Compose v2 — includes PostgreSQL; no Go or Node.js required.
+- **Contributors:** Go 1.21+ and Node.js 20+ for local development (see `CONTRIBUTING.md`). Local `go run` uses SQLite; Docker uses PostgreSQL.
 - **Privileges:** Root CA (`certs/ca.crt`) installation capabilities to satisfy client-side SSL validation constraints.
 
 ## 🐳 Docker Images
@@ -53,9 +53,9 @@ Pre-built images are published to [GitHub Container Registry](https://github.com
 |-----|----------------|
 | `:beta`, `:dev` | Every push to `dev` |
 | `:latest`, `:main` | Every push to `main` |
-| `:v1.1.0-beta.5` | Git tags (semver) |
+| `:v1.1.0-beta.6` | Git tags (semver) |
 
-Pin a release with `SHADOWSCHEMA_IMAGE=ghcr.io/notfixingit3/shadowschema:v1.1.0-beta.5` (see `.env.example`).
+Pin a release with `SHADOWSCHEMA_IMAGE=ghcr.io/notfixingit3/shadowschema:v1.1.0-beta.6` (see `.env.example`).
 
 ## 🚀 Deployment & Installation
 
@@ -76,7 +76,9 @@ docker compose up -d
 | MITM proxy | `127.0.0.1:38080` |
 | Export API | http://localhost:38081 |
 
-The generated CA certificate appears in `./certs/` on your host (bind-mounted from the proxy container). Session data persists in the `shadowschema-data` Docker volume.
+Session data persists in the `shadowschema-postgres` volume. The MITM CA keypair persists in `shadowschema-certs`.
+
+Copy `.env.example` to `.env` to customize Postgres credentials or pin image tags.
 
 To update after a new release:
 
@@ -202,8 +204,8 @@ The background export server on `:38081` powers the dashboard and CLI tooling:
 ShadowSchema ships with unit and integration tests across the proxy engine, export API, and schema inference pipeline.
 
 ```bash
-# Full suite (CGO required for SQLite)
-CGO_ENABLED=1 go test ./...
+# Full suite (uses in-memory SQLite via pure-Go driver)
+go test ./...
 
 # Static analysis (enforced in CI)
 go vet ./...

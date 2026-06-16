@@ -42,9 +42,31 @@ jobs:
 
       - name: Smoke test proxy container
         run: |
+          docker network create shadowschema-smoke-net
+
+          docker run -d \
+            --name shadowschema-postgres-smoke \
+            --network shadowschema-smoke-net \
+            -e POSTGRES_USER=shadowschema \
+            -e POSTGRES_PASSWORD=shadowschema \
+            -e POSTGRES_DB=shadowschema \
+            postgres:16-alpine
+
+          for attempt in $(seq 1 30); do
+            if docker exec shadowschema-postgres-smoke pg_isready -U shadowschema -d shadowschema >/dev/null 2>&1; then
+              break
+            fi
+            if [ "$attempt" = "30" ]; then
+              docker logs shadowschema-postgres-smoke
+              exit 1
+            fi
+            sleep 1
+          done
+
           docker run -d \
             --name shadowschema-smoke \
-            -e CGO_ENABLED=1 \
+            --network shadowschema-smoke-net \
+            -e DATABASE_URL=postgres://shadowschema:shadowschema@shadowschema-postgres-smoke:5432/shadowschema?sslmode=disable \
             -p 38080:38080 \
             -p 38081:38081 \
             shadowschema-smoke
@@ -64,7 +86,10 @@ jobs:
 
       - name: Stop proxy smoke container
         if: always()
-        run: docker rm -f shadowschema-smoke 2>/dev/null || true
+        run: |
+          docker rm -f shadowschema-smoke 2>/dev/null || true
+          docker rm -f shadowschema-postgres-smoke 2>/dev/null || true
+          docker network rm shadowschema-smoke-net 2>/dev/null || true
 
       - name: Smoke test dashboard container
         run: |

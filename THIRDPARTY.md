@@ -12,9 +12,13 @@ ShadowSchema is built upon several excellent open-source libraries. We acknowled
   OpenAPI 3.0 implementation for Go.
   *License: MIT*
 
-* **go-sqlite3** ([mattn/go-sqlite3](https://github.com/mattn/go-sqlite3))
-  sqlite3 driver for go using cgo.
+* **pgx** ([jackc/pgx](https://github.com/jackc/pgx))
+  PostgreSQL driver for Go (production persistence).
   *License: MIT*
+
+* **modernc.org/sqlite** ([modernc.org/sqlite](https://gitlab.com/cznic/sqlite))
+  Pure-Go SQLite driver (local development and tests).
+  *License: BSD-3-Clause*
 
 * **Golang x/net & x/text** ([golang.org/x/...](https://golang.org/x/))
   Supplementary Go networking and text processing libraries.

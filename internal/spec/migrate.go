@@ -13,7 +13,7 @@ func (s *SpecManager) loadAndMigrateSpec(sessionID int, specJSON string) (*opena
 	}
 	if migrateLegacyWebSocketSpecs(doc) {
 		if data, err := json.Marshal(doc); err == nil {
-			_, _ = s.db.Exec(`UPDATE sessions SET spec_json = ? WHERE id = ?`, string(data), sessionID)
+			_, _ = s.dbExec(`UPDATE sessions SET spec_json = ? WHERE id = ?`, string(data), sessionID)
 		}
 	}
 	return doc, true

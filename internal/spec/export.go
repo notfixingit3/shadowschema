@@ -24,7 +24,7 @@ func (s *SpecManager) buildExportDocument() ([]byte, error) {
 }
 
 func (s *SpecManager) listVaultCredentials() ([]AuthCredential, error) {
-	rows, err := s.db.Query(
+	rows, err := s.dbQuery(
 		`SELECT header_name, token_value, first_seen FROM auth_vault WHERE session_id = ? ORDER BY first_seen DESC`,
 		s.SessionID,
 	)

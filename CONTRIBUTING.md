@@ -9,7 +9,7 @@ First off, thank you for considering contributing to ShadowSchema! It's people l
 * **Submit Pull Requests:** 
   1. Fork the repo and create your branch from `dev`.
   2. If you've added code that should be tested, add Go unit tests.
-  3. Ensure the test suite passes with CGO enabled: `CGO_ENABLED=1 go test ./...`.
+  3. Ensure the test suite passes: `go test ./...`.
   4. Run static checks before opening a PR: `go vet ./...` and `gosec ./...` (CI enforces both).
   5. Make sure your code aligns with the existing style.
   6. Issue that pull request!
@@ -20,7 +20,7 @@ First off, thank you for considering contributing to ShadowSchema! It's people l
 
 To get started locally:
 1. Clone the repository.
-2. Run `go run main.go` to start the backend proxy (requires Go 1.21+ with `CGO_ENABLED=1`).
+2. Run `go run main.go` to start the backend proxy (uses SQLite at `./shadowschema.db` when `DATABASE_URL` is unset).
 3. In a separate terminal, navigate to `dashboard/` and run `npm install && npm run dev`.
 
 The Vite dev server proxies export API routes to `:38081` so the dashboard works at `http://localhost:5173` without extra configuration.

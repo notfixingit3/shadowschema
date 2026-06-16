@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.1.0-beta.6] - 2026-06-16
+
+### Added
+- **PostgreSQL persistence:** Docker stacks now run a `postgres:16-alpine` service; the proxy connects via `DATABASE_URL`.
+- **Database abstraction:** `internal/spec/database.go` supports PostgreSQL (production) and SQLite (local dev/tests).
+
+### Changed
+- Replaced CGO-based `go-sqlite3` with pure-Go `modernc.org/sqlite` for local development.
+- Docker images no longer require SQLite libraries or `/app/data` volumes; only `shadowschema-certs` (CA) and `shadowschema-postgres` (sessions) persist.
+- CI builds and tests run without CGO.
+
 ## [1.1.0-beta.5] - 2026-06-16
 
 ### Changed
