@@ -70,7 +70,7 @@ func (s *SpecManager) saveState() {
 	}
 }
 
-func (s *SpecManager) AddEndpoint(method, path string, body []byte) {
+func (s *SpecManager) AddEndpoint(req *http.Request, path string, body []byte) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -84,7 +84,7 @@ func (s *SpecManager) AddEndpoint(method, path string, body []byte) {
 	}
 
 	var operation *openapi3.Operation
-	switch method {
+	switch req.Method {
 	case http.MethodGet:
 		if pathItem.Get == nil {
 			pathItem.Get = openapi3.NewOperation()
@@ -116,6 +116,48 @@ func (s *SpecManager) AddEndpoint(method, path string, body []byte) {
 
 	if operation.Responses == nil {
 		operation.Responses = openapi3.NewResponses()
+	}
+
+	// Map query parameters
+	for key := range req.URL.Query() {
+		exists := false
+		for _, p := range operation.Parameters {
+			if p.Value != nil && p.Value.Name == key && p.Value.In == "query" {
+				exists = true
+				break
+			}
+		}
+		if !exists {
+			param := openapi3.NewQueryParameter(key)
+			param.Schema = openapi3.NewSchemaRef("", openapi3.NewStringSchema())
+			operation.AddParameter(param)
+		}
+	}
+
+	// Map headers (ignoring standard browser/proxy headers)
+	ignoreHeaders := map[string]bool{
+		"Host": true, "Connection": true, "Accept-Encoding": true, "User-Agent": true,
+		"Accept": true, "Accept-Language": true, "Sec-Fetch-Mode": true, "Sec-Fetch-Site": true,
+		"Sec-Fetch-Dest": true, "Referer": true, "Origin": true, "Content-Length": true,
+		"Content-Type": true, "X-Forwarded-For": true, "X-Forwarded-Proto": true,
+		"Sec-Ch-Ua": true, "Sec-Ch-Ua-Mobile": true, "Sec-Ch-Ua-Platform": true,
+	}
+	for key := range req.Header {
+		canonical := http.CanonicalHeaderKey(key)
+		if !ignoreHeaders[canonical] {
+			exists := false
+			for _, p := range operation.Parameters {
+				if p.Value != nil && p.Value.Name == canonical && p.Value.In == "header" {
+					exists = true
+					break
+				}
+			}
+			if !exists {
+				param := openapi3.NewHeaderParameter(canonical)
+				param.Schema = openapi3.NewSchemaRef("", openapi3.NewStringSchema())
+				operation.AddParameter(param)
+			}
+		}
 	}
 
 	// Use "200" as the default response for schema

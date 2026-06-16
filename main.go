@@ -92,9 +92,9 @@ func main() {
 				// Clean terminal output - Status code, aligned
 				fmt.Printf("[RESP] %-6d %s -> %s\n", resp.StatusCode, ctx.Req.URL.Path, dedupedPath)
 
-				// Send ctx.Req.URL.Path, ctx.Req.Method, and bodyBytes to spec manager
+				// Send ctx.Req to spec manager
 				if resp.StatusCode >= 200 && resp.StatusCode < 300 && len(bodyBytes) > 0 {
-					specManager.AddEndpoint(ctx.Req.Method, dedupedPath, bodyBytes)
+					specManager.AddEndpoint(ctx.Req, dedupedPath, bodyBytes)
 				}
 			}
 			return resp

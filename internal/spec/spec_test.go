@@ -8,7 +8,8 @@ import (
 func TestSpecManagerAddEndpoint(t *testing.T) {
 	sm := NewSpecManager()
 
-	sm.AddEndpoint(http.MethodGet, "/api/users", []byte(`{"id": 1, "name": "Alice"}`))
+	req1, _ := http.NewRequest(http.MethodGet, "http://example.com/api/users", nil)
+	sm.AddEndpoint(req1, "/api/users", []byte(`{"id": 1, "name": "Alice"}`))
 
 	pathItem := sm.doc.Paths.Find("/api/users")
 	if pathItem == nil {
@@ -20,7 +21,9 @@ func TestSpecManagerAddEndpoint(t *testing.T) {
 	}
 
 	// Add same endpoint with new fields
-	sm.AddEndpoint(http.MethodGet, "/api/users", []byte(`{"id": 2, "name": "Bob", "email": "bob@example.com"}`))
+	req2, _ := http.NewRequest(http.MethodGet, "http://example.com/api/users?limit=10", nil)
+	req2.Header.Set("X-Custom-Auth", "secret")
+	sm.AddEndpoint(req2, "/api/users", []byte(`{"id": 2, "name": "Bob", "email": "bob@example.com"}`))
 
 	resp := pathItem.Get.Responses.Value("200")
 	if resp == nil {
