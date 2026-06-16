@@ -54,7 +54,7 @@ func NewSpecManager(defaultTarget string) *SpecManager {
 	}
 
 	// Safely add ignore_rules if updating existing db
-	db.Exec(`ALTER TABLE sessions ADD COLUMN ignore_rules TEXT DEFAULT ''`)
+	_, _ = db.Exec(`ALTER TABLE sessions ADD COLUMN ignore_rules TEXT DEFAULT ''`)
 
 	sm := &SpecManager{db: db, Discovered: make(map[string]bool)}
 	sm.LoadLatestOrCreate(defaultTarget)
@@ -283,7 +283,7 @@ func (s *SpecManager) ExportJSON(filename string) error {
 		return err
 	}
 
-	return os.WriteFile(filename, data, 0644)
+	return os.WriteFile(filename, data, 0600)
 }
 
 func enableCORS(w http.ResponseWriter) {
@@ -312,7 +312,7 @@ func (s *SpecManager) StartExportServer(port string) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		w.Write(data)
+		_, _ = w.Write(data)
 	})
 
 	mux.HandleFunc("/sessions", func(w http.ResponseWriter, r *http.Request) {
@@ -333,12 +333,13 @@ func (s *SpecManager) StartExportServer(port string) {
 			var sessions []SessionMeta
 			for rows.Next() {
 				var sm SessionMeta
-				rows.Scan(&sm.ID, &sm.Name, &sm.Target, &sm.IgnoreRules, &sm.UpdatedAt)
-				sessions = append(sessions, sm)
+				if err := rows.Scan(&sm.ID, &sm.Name, &sm.Target, &sm.IgnoreRules, &sm.UpdatedAt); err == nil {
+					sessions = append(sessions, sm)
+				}
 			}
 			
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(sessions)
+			_ = json.NewEncoder(w).Encode(sessions)
 			return
 		}
 
@@ -348,7 +349,10 @@ func (s *SpecManager) StartExportServer(port string) {
 				Target string `json:"target"`
 				Ignore string `json:"ignore_rules"`
 			}
-			json.NewDecoder(r.Body).Decode(&reqData)
+			if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
+				http.Error(w, "Bad Request", http.StatusBadRequest)
+				return
+			}
 			
 			if reqData.Name == "" || reqData.Target == "" {
 				http.Error(w, "Name and Target required", http.StatusBadRequest)
@@ -390,7 +394,7 @@ func (s *SpecManager) StartExportServer(port string) {
 		s.mu.Unlock()
 		
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(keys)
+		_ = json.NewEncoder(w).Encode(keys)
 	})
 
 	mux.HandleFunc("/sessions/add-target", func(w http.ResponseWriter, r *http.Request) {
@@ -403,13 +407,16 @@ func (s *SpecManager) StartExportServer(port string) {
 			var reqData struct {
 				Domain string `json:"domain"`
 			}
-			json.NewDecoder(r.Body).Decode(&reqData)
+			if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
+				http.Error(w, "Bad Request", http.StatusBadRequest)
+				return
+			}
 
 			s.mu.Lock()
 			// Append to target
 			if !strings.Contains(s.TargetDomain, reqData.Domain) {
 				s.TargetDomain = s.TargetDomain + "," + reqData.Domain
-				s.db.Exec(`UPDATE sessions SET target = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, s.TargetDomain, s.SessionID)
+				_, _ = s.db.Exec(`UPDATE sessions SET target = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, s.TargetDomain, s.SessionID)
 			}
 			s.mu.Unlock()
 			w.WriteHeader(http.StatusOK)
@@ -427,7 +434,10 @@ func (s *SpecManager) StartExportServer(port string) {
 			var reqData struct {
 				ID int `json:"id"`
 			}
-			json.NewDecoder(r.Body).Decode(&reqData)
+			if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
+				http.Error(w, "Bad Request", http.StatusBadRequest)
+				return
+			}
 
 			s.mu.Lock()
 			var specJSON string
@@ -441,7 +451,7 @@ func (s *SpecManager) StartExportServer(port string) {
 				s.TargetDomain = t
 				s.IgnoreRules = ignore
 				s.Discovered = make(map[string]bool)
-				s.db.Exec(`UPDATE sessions SET updated_at = CURRENT_TIMESTAMP WHERE id = ?`, reqData.ID)
+				_, _ = s.db.Exec(`UPDATE sessions SET updated_at = CURRENT_TIMESTAMP WHERE id = ?`, reqData.ID)
 			}
 			s.mu.Unlock()
 			w.WriteHeader(http.StatusOK)
@@ -459,10 +469,13 @@ func (s *SpecManager) StartExportServer(port string) {
 			var reqData struct {
 				ID int `json:"id"`
 			}
-			json.NewDecoder(r.Body).Decode(&reqData)
+			if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
+				http.Error(w, "Bad Request", http.StatusBadRequest)
+				return
+			}
 
 			s.mu.Lock()
-			s.db.Exec(`DELETE FROM sessions WHERE id = ?`, reqData.ID)
+			_, _ = s.db.Exec(`DELETE FROM sessions WHERE id = ?`, reqData.ID)
 			
 			// If we just deleted the active session, load whatever is left or create a fallback
 			if s.SessionID == reqData.ID {
@@ -500,5 +513,10 @@ func (s *SpecManager) StartExportServer(port string) {
 	})
 
 	fmt.Printf("[INFO] Export server running on %s\n", port)
-	http.ListenAndServe(port, mux)
+	srv := &http.Server{
+		Addr:              port,
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+	_ = srv.ListenAndServe()
 }

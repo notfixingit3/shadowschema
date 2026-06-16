@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/elazarl/goproxy"
 
@@ -30,7 +31,7 @@ func isPortAvailable(port string) bool {
 	if err != nil {
 		return false
 	}
-	ln.Close()
+	_ = ln.Close()
 	return true
 }
 
@@ -125,5 +126,10 @@ func main() {
 	}()
 
 	fmt.Printf("Starting MITM API Mapper on %s (Default target: %s)\n", *port, *targetDomain)
-	log.Fatal(http.ListenAndServe(*port, p))
+	srv := &http.Server{
+		Addr:              *port,
+		Handler:           p,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+	log.Fatal(srv.ListenAndServe())
 }

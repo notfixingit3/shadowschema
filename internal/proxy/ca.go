@@ -22,7 +22,7 @@ func InitCA(certDir string) error {
 	certPath := filepath.Join(certDir, "ca.crt")
 	keyPath := filepath.Join(certDir, "ca.key")
 
-	if err := os.MkdirAll(certDir, 0755); err != nil {
+	if err := os.MkdirAll(certDir, 0750); err != nil {
 		return err
 	}
 
@@ -32,11 +32,13 @@ func InitCA(certDir string) error {
 			return err
 		}
 	}
-
+	// #nosec G304
 	certBytes, err := os.ReadFile(certPath)
 	if err != nil {
 		return err
 	}
+
+	// #nosec G304
 	keyBytes, err := os.ReadFile(keyPath)
 	if err != nil {
 		return err
@@ -89,7 +91,7 @@ func generateCA(certPath, keyPath string) error {
 	if err != nil {
 		return err
 	}
-
+	// #nosec G304
 	certOut, err := os.Create(certPath)
 	if err != nil {
 		return err
@@ -98,7 +100,7 @@ func generateCA(certPath, keyPath string) error {
 	if err := pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: certDER}); err != nil {
 		return err
 	}
-
+	// #nosec G304
 	keyOut, err := os.Create(keyPath)
 	if err != nil {
 		return err

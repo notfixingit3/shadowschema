@@ -4,6 +4,13 @@
   <p><b>Advanced API MITM Mapping & Reconnaissance Framework</b></p>
 </div>
 
+<p align="center">
+  <a href="https://github.com/notfixingit3/shadowschema/actions"><img src="https://github.com/notfixingit3/shadowschema/actions/workflows/build.yml/badge.svg" alt="Build Status"></a>
+  <a href="https://goreportcard.com/report/github.com/notfixingit3/shadowschema"><img src="https://goreportcard.com/badge/github.com/notfixingit3/shadowschema" alt="Go Report Card"></a>
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
+  <a href="https://github.com/sponsors/notfixingit3"><img src="https://img.shields.io/badge/sponsor-30363D?style=flat&logo=GitHub-Sponsors&logoColor=#ea4aaa" alt="Sponsor"></a>
+</p>
+
 ---
 
 ## 👁️ Overview
@@ -28,26 +35,53 @@ Built for red teamers, security researchers, and systems architects who need to 
 - **Runtime:** Go 1.18+ (Backend) and Node.js (Dashboard)
 - **Privileges:** Root CA (`certs/ca.crt`) installation capabilities to satisfy client-side SSL validation constraints.
 
-## 🚀 Deployment
+## 🚀 Deployment & Installation
 
-Initiate the proxy engine. By default, it will load your last active session from the SQLite database.
+### Option 1: Docker Compose (Recommended)
+The easiest way to run ShadowSchema and the visual dashboard simultaneously.
+```bash
+git clone https://github.com/notfixingit3/shadowschema.git
+cd shadowschema
+docker-compose up -d
+```
+The dashboard will be instantly available at `http://localhost:5173`. 
+*Note:* The generated CA certificate will appear in the `./certs/` directory on your host machine.
+
+### Option 2: Build from Source
+Initiate the proxy engine locally. By default, it will load your last active session from the SQLite database.
 
 ```bash
 # Initiate the MITM engine
 go run main.go
 ```
 
-### 🖥️ Live Visualization Dashboard
+#### 🖥️ Live Visualization Dashboard
 
-ShadowSchema comes bundled with a powerful, real-time visualization dashboard that acts as the control center for your recon operations.
-
-To start the dashboard:
+To start the local dashboard:
 ```bash
 cd dashboard
 npm install
 npm run dev
 ```
-Navigate to the provided localhost URL (usually `http://localhost:5173`) to watch your map build itself in real time. From the dashboard you can create new Target Sessions, manage noise cancellation rules, and explore Shadow Domains.
+Navigate to `http://localhost:5173` to watch your map build itself in real time. From the dashboard you can create new Target Sessions, manage noise cancellation rules, and explore Shadow Domains.
+
+## 🎮 Usage Examples
+
+### 1. Intercepting a Mobile App (iOS/Android)
+1. Start ShadowSchema and navigate to the dashboard to create a new session targeting `api.targetapp.com`.
+2. Transfer `certs/ca.crt` to your mobile device and install it as a trusted Root CA.
+3. Configure your mobile device's Wi-Fi settings to use your computer's local IP (e.g., `192.168.1.10:38080`) as an HTTP Proxy.
+4. Open the app! The dashboard will instantly populate with mapped endpoints as you navigate through it.
+
+### 2. Intercepting cURL Requests
+You can route CLI tools through the proxy using environment variables. The `-k` flag is required if you haven't installed the CA cert to your system's trust store.
+```bash
+export http_proxy=http://127.0.0.1:38080
+export https_proxy=http://127.0.0.1:38080
+
+# Assuming your active session targets "example.com"
+curl -k https://example.com/api/v1/users
+```
 
 ### 🔑 Trust Provisioning
 

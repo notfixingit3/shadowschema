@@ -1,0 +1,73 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [ "main", "dev" ]
+    tags: [ "v*.*.*" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.22'
+    - name: Install gcc (CGO requirement for sqlite)
+      run: sudo apt-get update && sudo apt-get install -y gcc
+    - name: Test
+      run: go test -v ./...
+      env:
+        CGO_ENABLED: 1
+
+  build:
+    needs: test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            bin: shadowschema-linux-amd64
+          - os: macos-latest
+            bin: shadowschema-darwin-amd64
+          - os: windows-latest
+            bin: shadowschema-windows-amd64.exe
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.22'
+    
+    - name: Build Proxy
+      run: go build -v -o ${{ matrix.bin }} main.go
+      env:
+        CGO_ENABLED: 1
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.bin }}
+        path: ${{ matrix.bin }}
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          artifacts/shadowschema-linux-amd64/shadowschema-linux-amd64
+          artifacts/shadowschema-darwin-amd64/shadowschema-darwin-amd64
+          artifacts/shadowschema-windows-amd64.exe/shadowschema-windows-amd64.exe
+        generate_release_notes: true
