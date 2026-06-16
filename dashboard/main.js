@@ -25,12 +25,48 @@ const btnCancel = document.getElementById('ns-cancel');
 const btnCreate = document.getElementById('ns-create');
 const inputName = document.getElementById('ns-name');
 const inputTarget = document.getElementById('ns-target');
+const inputIgnore = document.getElementById('ns-ignore');
 
 // Admin elements
 const manageBtn = document.getElementById('manage-sessions-btn');
 const adminModal = document.getElementById('manage-sessions-modal');
 const adminClose = document.getElementById('ms-close');
 const adminList = document.getElementById('session-admin-list');
+
+// UI elements
+const searchInput = document.getElementById('endpoint-search');
+const tabSchema = document.getElementById('tab-schema');
+const tabRaw = document.getElementById('tab-raw');
+const elRaw = document.getElementById('endpoint-raw');
+
+// Tab logic
+tabSchema.addEventListener('click', () => {
+  tabSchema.classList.add('active');
+  tabRaw.classList.remove('active');
+  elResponse.classList.remove('hidden');
+  elRaw.classList.add('hidden');
+});
+
+tabRaw.addEventListener('click', () => {
+  tabRaw.classList.add('active');
+  tabSchema.classList.remove('active');
+  elRaw.classList.remove('hidden');
+  elResponse.classList.add('hidden');
+});
+
+// Search Logic
+searchInput.addEventListener('input', (e) => {
+  const query = e.target.value.toLowerCase();
+  const items = endpointList.querySelectorAll('.endpoint-item');
+  items.forEach(li => {
+    const text = li.textContent.toLowerCase();
+    if (text.includes(query)) {
+      li.style.display = 'flex';
+    } else {
+      li.style.display = 'none';
+    }
+  });
+});
 
 let currentSpec = null;
 let selectedPath = null;
@@ -196,6 +232,12 @@ function renderDetails(path, method) {
   } else {
     elResponse.innerHTML = '<span style="color: #64748b;">// No JSON response payload intercepted yet.</span>';
   }
+
+  if (operation['x-last-payload']) {
+    elRaw.innerHTML = syntaxHighlight(operation['x-last-payload']);
+  } else {
+    elRaw.innerHTML = '<span style="color: #64748b;">// No raw payload captured.</span>';
+  }
 }
 
 // Export logic
@@ -275,13 +317,14 @@ async function renderAdminList() {
 btnCreate.addEventListener('click', async () => {
   const name = inputName.value.trim();
   const target = inputTarget.value.trim();
+  const ignore_rules = inputIgnore.value.trim();
   if (!name || !target) return;
 
   try {
     await fetch(`${API_URL}/sessions`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({name, target})
+      body: JSON.stringify({name, target, ignore_rules})
     });
     modal.classList.add('hidden');
     selectedPath = null;

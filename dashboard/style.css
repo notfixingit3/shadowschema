@@ -585,6 +585,23 @@ body {
   letter-spacing: 1px;
 }
 
+.tab-btn {
+  cursor: pointer;
+  padding-bottom: 4px;
+  color: var(--text-muted);
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+}
+
+.tab-btn:hover {
+  color: var(--text-main);
+}
+
+.tab-btn.active {
+  color: var(--accent-cyan);
+  border-bottom: 2px solid var(--accent-cyan);
+}
+
 .badge {
   font-size: 0.7rem;
   background: rgba(255,255,255,0.1);
