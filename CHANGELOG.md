@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.1.0-beta.9] - 2026-06-17
+
 ### Fixed
 - **Proxy latency:** Debounce spec persistence (default 2s) so intercepted traffic no longer blocks on a full Postgres `UPDATE` per request/WebSocket frame.
 
