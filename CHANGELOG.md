@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.1.3-beta.0] - 2026-06-17
+
+Development branch opened for v1.1.3 on `dev`.
+
 ## [1.1.2] - 2026-06-17
 
 ### Added
