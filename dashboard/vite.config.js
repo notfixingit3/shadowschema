@@ -18,6 +18,7 @@ export default defineConfig(({ mode }) => {
       '/sessions/add-target': 'http://127.0.0.1:38081',
       '/sessions/switch': 'http://127.0.0.1:38081',
       '/sessions/delete': 'http://127.0.0.1:38081',
+      '/sessions/rename': 'http://127.0.0.1:38081',
     },
   };
 

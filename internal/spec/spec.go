@@ -575,6 +575,45 @@ func (s *SpecManager) mountExportRoutes(mux *http.ServeMux) {
 		}
 	})
 
+	mux.HandleFunc("/sessions/rename", func(w http.ResponseWriter, r *http.Request) {
+		enableCORS(w)
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		if r.Method == "POST" {
+			var reqData struct {
+				ID   int    `json:"id"`
+				Name string `json:"name"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
+				http.Error(w, "Bad Request", http.StatusBadRequest)
+				return
+			}
+
+			name := strings.TrimSpace(reqData.Name)
+			if reqData.ID <= 0 || name == "" {
+				http.Error(w, "ID and name required", http.StatusBadRequest)
+				return
+			}
+
+			s.mu.Lock()
+			result, err := s.dbExec(`UPDATE sessions SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, name, reqData.ID)
+			s.mu.Unlock()
+
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			if rows, _ := result.RowsAffected(); rows == 0 {
+				http.Error(w, "Session not found", http.StatusNotFound)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+		}
+	})
+
 	mux.HandleFunc("/sessions/delete", func(w http.ResponseWriter, r *http.Request) {
 		enableCORS(w)
 		if r.Method == "OPTIONS" {

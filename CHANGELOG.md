@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.1.2-beta.1] - 2026-06-17
+
+### Added
+- **Session rename:** `POST /sessions/rename` and **Rename** control in the Manage Sessions modal.
+- **Dashboard QoL:** Endpoint sidebar sorted A→Z; method filter chips (All / GET / POST / WS); Vault **Copy** per credential; session **Updated** timestamps in Manage; export filenames use the session name (JSON + YAML).
+
 ### Changed
 - **Hosted deployment:** Preview URL and operator stack configs removed from the public repo; private tester materials maintained outside git. Vite remote preview is opt-in via `VITE_PREVIEW_HOST`.
 

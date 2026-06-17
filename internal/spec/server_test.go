@@ -243,6 +243,56 @@ func TestSessionsDeleteEndpointFallsBackToRemainingSession(t *testing.T) {
 	}
 }
 
+func TestSessionsRenameEndpoint(t *testing.T) {
+	sm := newTestSpecManager(t, "rename.example.com")
+	sessionID := sm.SessionID
+	server := httptest.NewServer(sm.ExportHandler())
+	defer server.Close()
+
+	renameResp, err := http.Post(
+		server.URL+"/sessions/rename",
+		"application/json",
+		bytes.NewBufferString(`{"id":`+strconv.Itoa(sessionID)+`,"name":"Renamed Session"}`),
+	)
+	if err != nil {
+		t.Fatalf("rename request failed: %v", err)
+	}
+	defer renameResp.Body.Close()
+
+	if renameResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 on rename, got %d", renameResp.StatusCode)
+	}
+
+	listResp, err := http.Get(server.URL + "/sessions")
+	if err != nil {
+		t.Fatalf("list request failed: %v", err)
+	}
+	defer listResp.Body.Close()
+
+	var sessions []SessionMeta
+	if err := json.NewDecoder(listResp.Body).Decode(&sessions); err != nil {
+		t.Fatalf("decode sessions failed: %v", err)
+	}
+	for _, session := range sessions {
+		if session.ID == sessionID && session.Name != "Renamed Session" {
+			t.Fatalf("expected renamed session, got %q", session.Name)
+		}
+	}
+
+	missingResp, err := http.Post(
+		server.URL+"/sessions/rename",
+		"application/json",
+		bytes.NewBufferString(`{"id":99999,"name":"Missing"}`),
+	)
+	if err != nil {
+		t.Fatalf("missing rename request failed: %v", err)
+	}
+	defer missingResp.Body.Close()
+	if missingResp.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected 404 for missing session, got %d", missingResp.StatusCode)
+	}
+}
+
 func TestSessionsAddTargetEndpoint(t *testing.T) {
 	sm := newTestSpecManager(t, "example.com")
 	server := httptest.NewServer(sm.ExportHandler())

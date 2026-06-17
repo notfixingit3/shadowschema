@@ -441,6 +441,7 @@ The background export server on `:38081` powers the dashboard and CLI tooling:
 | `/discovered` | GET | Out-of-scope domains seen via CONNECT |
 | `/sessions` | GET, POST | List or create recon sessions |
 | `/sessions/switch` | POST | Activate a saved session |
+| `/sessions/rename` | POST | Rename a saved session (`{"id": 1, "name": "..."}`) |
 | `/sessions/delete` | POST | Delete a session |
 | `/sessions/add-target` | POST | Append a domain to the active target list |
 | `/generate-sdk` | POST | Generate a Python, TypeScript, Go, or Rust SDK zip |

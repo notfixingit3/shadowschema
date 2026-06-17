@@ -85,6 +85,12 @@
           <div style="padding: 1rem 1rem 0 1rem;">
             <input type="text" id="endpoint-search" class="glass-input" style="width: 100%;" placeholder="Search paths...">
           </div>
+          <div id="method-filters" class="method-filters">
+            <button type="button" class="glass-btn small method-filter-btn active" data-filter="all">All</button>
+            <button type="button" class="glass-btn small method-filter-btn" data-filter="get">GET</button>
+            <button type="button" class="glass-btn small method-filter-btn" data-filter="post">POST</button>
+            <button type="button" class="glass-btn small method-filter-btn" data-filter="ws">WS</button>
+          </div>
           <div class="sidebar-scroll">
             <ul id="endpoint-list" class="endpoint-list">
               <!-- Populated by JS -->
@@ -168,7 +174,7 @@
             <a href="https://github.com/notfixingit3/shadowschema" target="_blank" rel="noopener" class="footer-link">GitHub</a>
             <a href="https://github.com/notfixingit3/shadowschema/issues" target="_blank" rel="noopener" class="footer-link">Report Issue</a>
             <a href="https://github.com/sponsors/notfixingit3" target="_blank" rel="noopener" class="footer-link sponsor-link">💖 Sponsor</a>
-            <span class="footer-version">v1.1.2-beta.0</span>
+            <span class="footer-version">v1.1.2-beta.1</span>
           </div>
         </div>
       </footer>
@@ -188,6 +194,7 @@
                 <th style="padding: 0.5rem; color: var(--text-muted);">Header</th>
                 <th style="padding: 0.5rem; color: var(--text-muted);">Token Value</th>
                 <th style="padding: 0.5rem; color: var(--text-muted);">First Seen</th>
+                <th style="padding: 0.5rem; color: var(--text-muted);"></th>
               </tr>
             </thead>
             <tbody id="vault-list">
@@ -232,7 +239,7 @@
       <div class="modal-content glass-panel" style="width: 600px;">
         <div class="modal-header">
           <h3>Session Management</h3>
-          <p>Delete obsolete reconnaissance sessions.</p>
+          <p>Rename or delete saved reconnaissance sessions.</p>
         </div>
         <div class="sidebar-scroll" style="max-height: 350px; padding: 0; background: rgba(0,0,0,0.3); border-radius: 12px; border: 1px solid var(--glass-border);">
           <ul id="session-admin-list" class="endpoint-list" style="padding: 1rem;">

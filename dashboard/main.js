@@ -83,6 +83,7 @@ const statTargets = document.getElementById('stat-targets');
 
 // UI elements
 const searchInput = document.getElementById('endpoint-search');
+const methodFilters = document.getElementById('method-filters');
 const tabSchema = document.getElementById('tab-schema');
 const tabRaw = document.getElementById('tab-raw');
 
@@ -102,47 +103,81 @@ tabRaw.addEventListener('click', () => {
   elResponse.classList.add('hidden');
 });
 
-// Search Logic
-searchInput.addEventListener('input', (e) => {
-  const query = e.target.value.toLowerCase();
-  const items = endpointList.querySelectorAll('.endpoint-item');
-  items.forEach(li => {
-    const text = li.textContent.toLowerCase();
-    if (text.includes(query)) {
-      li.style.display = 'flex';
-    } else {
-      li.style.display = 'none';
-    }
+// Search + method filter logic
+let methodFilter = 'all';
+
+if (searchInput) {
+  searchInput.addEventListener('input', () => renderSidebar());
+}
+
+if (methodFilters) {
+  methodFilters.addEventListener('click', (e) => {
+    const btn = e.target.closest('.method-filter-btn');
+    if (!btn) return;
+    methodFilter = btn.dataset.filter || 'all';
+    methodFilters.querySelectorAll('.method-filter-btn').forEach((el) => {
+      el.classList.toggle('active', el === btn);
+    });
+    renderSidebar();
   });
-});
+}
 
 // Vault logic
 if (vaultBtn && vaultModal && vaultClose && vaultList) {
   vaultBtn.addEventListener('click', () => {
     vaultModal.classList.remove('hidden');
-    vaultList.innerHTML = '<tr><td colspan="3" style="text-align:center; padding: 1rem;">Loading...</td></tr>';
+    vaultList.innerHTML = '<tr><td colspan="4" style="text-align:center; padding: 1rem;">Loading...</td></tr>';
     
     fetch(`${API_URL}/vault`)
       .then(res => res.json())
       .then(creds => {
         vaultList.innerHTML = '';
         if (!creds || creds.length === 0) {
-          vaultList.innerHTML = '<tr><td colspan="3" style="text-align:center; padding: 1rem;">No credentials captured yet.</td></tr>';
+          vaultList.innerHTML = '<tr><td colspan="4" style="text-align:center; padding: 1rem;">No credentials captured yet.</td></tr>';
           return;
         }
         creds.forEach(c => {
           const tr = document.createElement('tr');
           tr.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
-          tr.innerHTML = `
-            <td style="padding: 0.75rem 0.5rem; font-family: var(--font-mono); color: var(--accent-cyan);">${c.header_name}</td>
-            <td style="padding: 0.75rem 0.5rem; font-family: var(--font-mono); word-break: break-all;">${c.token_value}</td>
-            <td style="padding: 0.75rem 0.5rem; font-size: 0.85rem; color: var(--text-muted);">${new Date(c.first_seen).toLocaleString()}</td>
-          `;
+
+          const headerCell = document.createElement('td');
+          headerCell.style.padding = '0.75rem 0.5rem';
+          headerCell.style.fontFamily = 'var(--font-mono)';
+          headerCell.style.color = 'var(--accent-cyan)';
+          headerCell.textContent = c.header_name;
+
+          const valueCell = document.createElement('td');
+          valueCell.style.padding = '0.75rem 0.5rem';
+          valueCell.style.fontFamily = 'var(--font-mono)';
+          valueCell.style.wordBreak = 'break-all';
+          valueCell.textContent = c.token_value;
+
+          const seenCell = document.createElement('td');
+          seenCell.style.padding = '0.75rem 0.5rem';
+          seenCell.style.fontSize = '0.85rem';
+          seenCell.style.color = 'var(--text-muted)';
+          seenCell.textContent = new Date(c.first_seen).toLocaleString();
+
+          const actionCell = document.createElement('td');
+          actionCell.style.padding = '0.75rem 0.5rem';
+          const copyBtn = document.createElement('button');
+          copyBtn.className = 'glass-btn small';
+          copyBtn.textContent = 'Copy';
+          copyBtn.addEventListener('click', () => {
+            navigator.clipboard.writeText(c.token_value).then(() => {
+              const original = copyBtn.textContent;
+              copyBtn.textContent = '✓';
+              setTimeout(() => { copyBtn.textContent = original; }, 1500);
+            });
+          });
+          actionCell.appendChild(copyBtn);
+
+          tr.append(headerCell, valueCell, seenCell, actionCell);
           vaultList.appendChild(tr);
         });
       })
       .catch(err => {
-        vaultList.innerHTML = `<tr><td colspan="3" style="text-align:center; padding: 1rem; color: red;">Error: ${err}</td></tr>`;
+        vaultList.innerHTML = `<tr><td colspan="4" style="text-align:center; padding: 1rem; color: red;">Error: ${err}</td></tr>`;
       });
   });
 
@@ -155,6 +190,7 @@ let currentSpec = null;
 let selectedPath = null;
 let selectedMethod = null;
 let currentSessionId = null;
+let currentSessionName = null;
 
 const HTTP_METHODS = new Set(['get', 'post', 'put', 'delete', 'patch', 'head', 'options', 'trace', 'connect']);
 
@@ -165,6 +201,30 @@ function isWebSocketOperation(method, operation) {
 
 function displayMethodFor(method, operation) {
   return isWebSocketOperation(method, operation) ? 'WS' : method.toUpperCase();
+}
+
+function matchesMethodFilter(method, operation) {
+  if (methodFilter === 'all') return true;
+  const normalized = method.toLowerCase();
+  if (methodFilter === 'ws') return isWebSocketOperation(method, operation);
+  if (methodFilter === 'get') return normalized === 'get';
+  if (methodFilter === 'post') return ['post', 'put', 'patch', 'delete'].includes(normalized);
+  return true;
+}
+
+function sessionExportSlug() {
+  const raw = currentSessionName || `session_${currentSessionId || 'export'}`;
+  const slug = raw.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+  return slug || 'session';
+}
+
+function downloadBlob(blob, filename) {
+  const url = window.URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  window.URL.revokeObjectURL(url);
 }
 
 function renderWebSocketStats(stats) {
@@ -334,6 +394,7 @@ async function fetchSessions() {
     
     const active = sessions.find(s => s.id.toString() === currentSessionId);
     if (active) {
+      currentSessionName = active.name;
       statTargets.textContent = active.target.split(',').join(', ');
     }
   } catch (err) {
@@ -396,37 +457,51 @@ function renderSidebar() {
     return;
   }
 
-  statRoutes.textContent = Object.keys(currentSpec.paths).length;
+  const searchQuery = searchInput?.value?.toLowerCase().trim() || '';
+  const entries = [];
 
   Object.entries(currentSpec.paths).forEach(([path, methods]) => {
+    if (searchQuery && !path.toLowerCase().includes(searchQuery)) return;
+
     Object.keys(methods).forEach(method => {
       if (!HTTP_METHODS.has(method.toLowerCase())) return;
 
       const operation = methods[method];
-      count++;
-      const li = document.createElement('li');
-      li.className = 'endpoint-item';
-      if (path === selectedPath && method === selectedMethod.toLowerCase()) {
-        li.classList.add('active');
-      }
-      
-      const displayMethod = displayMethodFor(method, operation);
-      
-      li.innerHTML = `
-        <span class="method-badge badge-${displayMethod}">${displayMethod}</span>
-        <span class="endpoint-path-label">${path}</span>
-      `;
-      
-      li.onclick = () => {
-        selectedPath = path;
-        selectedMethod = method.toUpperCase();
-        renderSidebar();
-        renderDetails(path, method.toUpperCase());
-        resetDetailScroll();
-      };
-      
-      endpointList.appendChild(li);
+      if (!matchesMethodFilter(method, operation)) return;
+
+      entries.push({ path, method, operation });
     });
+  });
+
+  entries.sort((a, b) => a.path.localeCompare(b.path) || a.method.localeCompare(b.method));
+
+  const uniqueRoutes = new Set(entries.map((entry) => entry.path));
+  statRoutes.textContent = uniqueRoutes.size;
+
+  entries.forEach(({ path, method, operation }) => {
+    count++;
+    const li = document.createElement('li');
+    li.className = 'endpoint-item';
+    if (path === selectedPath && method === selectedMethod.toLowerCase()) {
+      li.classList.add('active');
+    }
+
+    const displayMethod = displayMethodFor(method, operation);
+
+    li.innerHTML = `
+      <span class="method-badge badge-${displayMethod}">${displayMethod}</span>
+      <span class="endpoint-path-label">${path}</span>
+    `;
+
+    li.onclick = () => {
+      selectedPath = path;
+      selectedMethod = method.toUpperCase();
+      renderSidebar();
+      renderDetails(path, method.toUpperCase());
+      resetDetailScroll();
+    };
+
+    endpointList.appendChild(li);
   });
   statEndpoints.textContent = count;
 }
@@ -541,16 +616,20 @@ function renderDetails(path, method) {
 // Export logic
 exportBtn.addEventListener('click', () => {
   if (!currentSpec) return;
-  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(currentSpec, null, 2));
-  const dlAnchorElem = document.createElement('a');
-  dlAnchorElem.setAttribute("href", dataStr);
-  dlAnchorElem.setAttribute("download", `shadowschema_${currentSessionId}.json`);
-  dlAnchorElem.click();
+  const blob = new Blob([JSON.stringify(currentSpec, null, 2)], { type: 'application/json' });
+  downloadBlob(blob, `shadowschema_${sessionExportSlug()}.json`);
 });
 
 if (exportYamlBtn) {
-  exportYamlBtn.addEventListener('click', () => {
-    window.location.href = `${API_URL}/export-map?format=yaml`;
+  exportYamlBtn.addEventListener('click', async () => {
+    try {
+      const res = await fetch(`${API_URL}/export-map?format=yaml`);
+      if (!res.ok) throw new Error('YAML export failed');
+      const blob = await res.blob();
+      downloadBlob(blob, `shadowschema_${sessionExportSlug()}.yaml`);
+    } catch (err) {
+      console.error(err);
+    }
   });
 }
 
@@ -677,15 +756,69 @@ async function renderAdminList() {
       const li = document.createElement('li');
       li.className = 'endpoint-item';
       li.style.justifyContent = 'space-between';
-      li.innerHTML = `
-        <div style="display: flex; flex-direction: column; gap: 4px;">
-          <strong style="color: var(--accent-cyan)">${s.name}</strong>
-          <span style="font-size: 0.8rem; color: var(--text-muted)">Target: ${s.target}</span>
-        </div>
-        <button class="glass-btn small" style="background: rgba(239, 68, 68, 0.2); border-color: rgba(239,68,68,0.4); color: #f87171;">Delete</button>
-      `;
-      
-      const delBtn = li.querySelector('button');
+      li.style.alignItems = 'center';
+      li.style.gap = '0.75rem';
+
+      const info = document.createElement('div');
+      info.style.display = 'flex';
+      info.style.flexDirection = 'column';
+      info.style.gap = '4px';
+      info.style.flex = '1';
+
+      const title = document.createElement('strong');
+      title.style.color = 'var(--accent-cyan)';
+      title.textContent = s.name;
+
+      const target = document.createElement('span');
+      target.style.fontSize = '0.8rem';
+      target.style.color = 'var(--text-muted)';
+      target.textContent = `Target: ${s.target}`;
+
+      const updated = document.createElement('span');
+      updated.style.fontSize = '0.75rem';
+      updated.style.color = 'var(--text-muted)';
+      updated.textContent = s.updated_at
+        ? `Updated: ${new Date(s.updated_at).toLocaleString()}`
+        : 'Updated: —';
+
+      info.append(title, target, updated);
+
+      const actions = document.createElement('div');
+      actions.style.display = 'flex';
+      actions.style.gap = '0.5rem';
+
+      const renameBtn = document.createElement('button');
+      renameBtn.className = 'glass-btn small';
+      renameBtn.textContent = 'Rename';
+      renameBtn.onclick = async () => {
+        const newName = prompt('Rename session:', s.name);
+        if (!newName) return;
+        const trimmed = newName.trim();
+        if (!trimmed || trimmed === s.name) return;
+
+        renameBtn.textContent = '...';
+        const res = await fetch(`${API_URL}/sessions/rename`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: s.id, name: trimmed }),
+        });
+        if (!res.ok) {
+          renameBtn.textContent = 'Rename';
+          return;
+        }
+        if (s.id.toString() === currentSessionId) {
+          currentSessionName = trimmed;
+        }
+        await fetchSpec();
+        await renderAdminList();
+      };
+
+      const delBtn = document.createElement('button');
+      delBtn.className = 'glass-btn small';
+      delBtn.style.background = 'rgba(239, 68, 68, 0.2)';
+      delBtn.style.borderColor = 'rgba(239,68,68,0.4)';
+      delBtn.style.color = '#f87171';
+      delBtn.textContent = 'Delete';
       delBtn.onclick = async () => {
         delBtn.textContent = '...';
         await fetch(`${API_URL}/sessions/delete`, {
@@ -693,11 +826,14 @@ async function renderAdminList() {
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({id: s.id})
         });
-        currentSessionId = null; // force a clean reload
+        currentSessionId = null;
+        currentSessionName = null;
         await fetchSpec();
         await renderAdminList();
       };
-      
+
+      actions.append(renameBtn, delBtn);
+      li.append(info, actions);
       adminList.appendChild(li);
     });
   } catch(err) {

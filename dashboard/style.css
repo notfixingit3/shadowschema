@@ -178,6 +178,19 @@ body {
   font-size: 0.8rem;
 }
 
+.method-filters {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  padding: 0.65rem 1rem 0;
+}
+
+.method-filter-btn.active {
+  border-color: var(--accent-cyan);
+  background: rgba(0, 240, 255, 0.12);
+  color: var(--accent-cyan);
+}
+
 .glass-btn.primary {
   background: linear-gradient(135deg, var(--accent-purple), #5a189a);
   border-color: transparent;
