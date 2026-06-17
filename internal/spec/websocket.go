@@ -50,7 +50,7 @@ func (s *SpecManager) AddWebSocketFrame(path, direction string, opcode byte, pay
 	updateWebSocketStats(operation, direction, opcode, fragments)
 	s.inferWebSocketMessageSchema(operation, direction, opcode, record)
 
-	s.saveState()
+	s.scheduleSave()
 }
 
 func buildWebSocketFrameRecord(direction string, opcode byte, payload []byte, fragments int) map[string]interface{} {

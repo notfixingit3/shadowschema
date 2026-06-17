@@ -27,6 +27,9 @@ type SpecManager struct {
 	TargetDomain string
 	IgnoreRules  string
 	Discovered   map[string]bool
+
+	saveTimerMu sync.Mutex
+	saveTimer   *time.Timer
 }
 
 type SessionMeta struct {
@@ -124,18 +127,6 @@ func (s *SpecManager) AddDiscoveredDomain(host string) {
 	}
 }
 
-func (s *SpecManager) saveState() {
-	data, err := json.Marshal(s.doc)
-	if err != nil {
-		log.Printf("[ERROR] Failed to marshal spec for DB: %v", err)
-		return
-	}
-	_, err = s.dbExec(`UPDATE sessions SET spec_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, string(data), s.SessionID)
-	if err != nil {
-		log.Printf("[ERROR] Failed to save state to DB: %v", err)
-	}
-}
-
 func (s *SpecManager) AddWebSocket(req *http.Request, path string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -202,7 +193,7 @@ func (s *SpecManager) AddWebSocket(req *http.Request, path string) {
 		}
 	}
 
-	s.saveState()
+	s.scheduleSave()
 }
 
 func (s *SpecManager) AddEndpoint(req *http.Request, path string, body []byte) {
@@ -336,7 +327,7 @@ func (s *SpecManager) AddEndpoint(req *http.Request, path string, body []byte) {
 		}
 	}
 
-	s.saveState()
+	s.scheduleSave()
 }
 
 func (s *SpecManager) ExportJSON(filename string) error {

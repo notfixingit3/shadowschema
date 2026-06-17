@@ -142,6 +142,7 @@ func main() {
 	go func() {
 		<-c
 		fmt.Println("\n[INFO] Gracefully shutting down...")
+		specManager.Flush()
 		if err := specManager.ExportJSON("openapi.json"); err != nil {
 			fmt.Printf("[ERROR] Failed to export openapi.json: %v\n", err)
 		} else {
