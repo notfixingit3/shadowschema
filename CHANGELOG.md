@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- **Hosted deployment:** Removed Traefik/preview section from public README and deleted `deploy/preview/`; stack configs and tester guide moved to private materials outside the repo.
+
 ## [1.1.2-beta.0] - 2026-06-17
 
 Development branch opened for v1.1.2 on `dev`.

@@ -16,7 +16,7 @@ First off, thank you for considering contributing to ShadowSchema! It's people l
 
 ### Development Setup
 
-**Contributors** run the Go and Node dev toolchains directly. **End users** should use the pre-built Docker images (`docker compose up` or `deploy/preview/`) — see `README.md` (Quick Start and **Choosing stable vs beta**).
+**Contributors** run the Go and Node dev toolchains directly. **End users** should use the pre-built Docker images (`docker compose up`) — see `README.md` (Quick Start and **Choosing stable vs beta**).
 
 To get started locally:
 1. Clone the repository.
@@ -40,8 +40,6 @@ SHADOWSCHEMA_IMAGE=shadowschema:local SHADOWSCHEMA_DASHBOARD_IMAGE=shadowschema-
 - **SDK generation:** Tests that call `npx` should skip gracefully when the tool or network is unavailable (`t.Skip`).
 - **Before a release:** Update `CHANGELOG.md`, bump the version in `dashboard/index.html`, and tag with `v*.*.*` to trigger the GitHub release workflow.
 - **Docker images:** `.github/workflows/docker.yml` builds and publishes proxy + dashboard images to GHCR on every push to `main` or `dev` (and on version tags). `dev` gets `:beta` and `:dev`; `main` gets `:latest` and `:main`; git tags publish `:vX.Y.Z`. Document tag choices in `README.md` when behavior changes.
-- **preview preview:** Stack lives at `/opt/stacks/shadowschema_preview` on `notfixingit`. Sync `deploy/preview/` (compose, nginx configs, `.env.example` — not the git repo), ensure `.env` exists with `POSTGRES_PASSWORD`, then `docker compose pull && docker compose up -d`. Requires `postgres`, `proxy`, `dashboard`, and `nginx` services; proxy needs `DATABASE_URL` (set automatically by compose).
-
 ### Release workflow
 
 ShadowSchema uses a `dev` → `main` promotion model. Docker images publish automatically on push; git tags publish immutable `:vX.Y.Z` images.
@@ -72,7 +70,7 @@ feature/fix PRs ──► dev ──► :beta / :dev images (every push)
 3. Update `README.md` / `.env.example` version examples if the stable pin changed.
 4. Merge `dev` → `main`.
 5. Tag on `main`: `git tag vX.Y.Z && git push origin vX.Y.Z`.
-6. CI publishes `ghcr.io/.../shadowschema:vX.Y.Z` and `:latest`; hosted stacks pin `:vX.Y.Z` in `.env`.
+6. CI publishes `ghcr.io/.../shadowschema:vX.Y.Z` and `:latest`; private hosted stacks (outside this repo) pin `:vX.Y.Z` in `.env`.
 
 **Documentation-only releases** (e.g. v1.1.1): follow the same flow — no code changes required, but still bump the dashboard footer version and CHANGELOG so tags and GHCR metadata stay aligned.
 
