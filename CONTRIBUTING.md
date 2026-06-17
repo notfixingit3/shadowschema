@@ -40,7 +40,7 @@ SHADOWSCHEMA_IMAGE=shadowschema:local SHADOWSCHEMA_DASHBOARD_IMAGE=shadowschema-
 - **SDK generation:** Tests that call `npx` should skip gracefully when the tool or network is unavailable (`t.Skip`).
 - **Before a release:** Update `CHANGELOG.md`, bump the version in `dashboard/index.html`, and tag with `v*.*.*` to trigger the GitHub release workflow.
 - **Docker images:** `.github/workflows/docker.yml` builds and publishes proxy + dashboard images to GHCR on every push to `main` or `dev` (and on version tags). `dev` gets `:beta` and `:dev`; `main` gets `:latest` and `:main`; git tags publish `:vX.Y.Z`. Document tag choices in `README.md` when behavior changes.
-- **Private preview stack:** `deploy/preview/` is for operator use (Traefik + GHCR image pins). The public README does not publish the preview URL — share hosted access only with approved testers via private materials outside the repo.
+
 ### Release workflow
 
 ShadowSchema uses a `dev` → `main` promotion model. Docker images publish automatically on push; git tags publish immutable `:vX.Y.Z` images.

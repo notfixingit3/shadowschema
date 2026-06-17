@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Changed
-- **Hosted deployment:** Preview URL removed from public README/docs; tester guide lives in private materials outside the repo. `deploy/preview/` uses `PREVIEW_HOST` / `CROWDSEC_BOUNCER_KEY` in `.env` (not committed). Vite preview host is opt-in via `VITE_PREVIEW_HOST`.
+- **Hosted deployment:** Preview URL and operator stack configs removed from the public repo; private tester materials maintained outside git. Vite remote preview is opt-in via `VITE_PREVIEW_HOST`.
 
 ## [1.1.2-beta.0] - 2026-06-17
 
@@ -22,8 +22,8 @@ Documentation-only stable release. No application code changes.
 - **CONTRIBUTING:** Release workflow and screenshot regeneration instructions.
 
 ### Changed
-- **README:** Reorganized around Quick Start → Docker Deployment → Hosted → Development; expanded Docker image tag guide (`:beta`, `:latest`, `:vX.Y.Z`) with stable/beta pinning examples.
-- **`.env.example` / `deploy/preview/.env.example`:** Commented blocks for beta, pinned stable, and rolling `:latest` tags.
+- **README:** Reorganized around Quick Start → Docker Deployment → Development; expanded Docker image tag guide (`:beta`, `:latest`, `:vX.Y.Z`) with stable/beta pinning examples.
+- **`.env.example`:** Commented blocks for beta, pinned stable, and rolling `:latest` tags.
 - **Troubleshooting:** arm64 GHCR pull errors and Docker `127.0.0.1` vs `host.docker.internal` upstream note.
 
 ## [1.1.1-beta.3] - 2026-06-17
@@ -53,7 +53,7 @@ Documentation-only release. No application code changes.
 
 ### Changed
 - **README:** Reorganized around Quick Start → Docker Deployment → Hosted → Development. Expanded image tag guide (`:beta`, `:latest`, `:vX.Y.Z`), stable/beta pinning examples, stack layout, env vars, update/rollback, and running-image checks.
-- **`.env.example` / `deploy/preview/.env.example`:** Commented blocks for beta, pinned stable, and rolling `:latest` tags.
+- **`.env.example`:** Commented blocks for beta, pinned stable, and rolling `:latest` tags.
 
 ## [1.1.1-beta.0] - 2026-06-17
 
@@ -90,7 +90,7 @@ Stable release of the v1.1.0 beta cycle.
 - **CA cert download:** Dashboard **🔒 CA Cert** button and `GET /ca-cert` export API endpoint serve `shadowschema-ca.crt` for browser trust setup.
 
 ### Changed
-- preview deployment docs: Postgres stack layout, first-time setup, migration note from SQLite volumes.
+- Hosted deployment docs: Postgres stack layout, first-time setup, migration note from SQLite volumes.
 
 ## [1.1.0-beta.7] - 2026-06-16
 
@@ -123,7 +123,7 @@ Stable release of the v1.1.0 beta cycle.
 - **Production Dockerfiles:** Multi-stage proxy image (pre-built Go binary + Node for SDK generation) and static dashboard image (Vite build + nginx).
 
 ### Changed
-- preview deployment now pulls GHCR `:beta` images instead of compiling with `go run` on the server.
+- Private hosted stack now pulls GHCR `:beta` images instead of compiling with `go run` on the server.
 - Dashboard preview serves a production Vite build instead of the Vite dev server.
 
 ## [1.1.0-beta.3] - 2026-06-16
@@ -134,7 +134,7 @@ Stable release of the v1.1.0 beta cycle.
 ## [1.1.0-beta.2] - 2026-06-16
 
 ### Added
-- **preview deployment stack:** `deploy/preview/` with Traefik + nginx + docker-compose for hosting at `preview.example.internal`.
+- **Private hosted stack:** Traefik + nginx + docker-compose deployment configs (maintained outside the public repo).
 - **Vite dev proxy:** Dashboard dev server proxies export API routes to `:38081` for same-origin local development.
 
 ### Changed
