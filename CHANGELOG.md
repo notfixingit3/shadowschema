@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.1.2-beta.0] - 2026-06-17
+
+Development branch opened for v1.1.2 on `dev`.
+
 ## [1.1.1] - 2026-06-17
 
 Documentation-only stable release. No application code changes.
