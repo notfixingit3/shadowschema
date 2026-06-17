@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-06-17
+
+Documentation-only stable release. No application code changes.
+
+### Added
+- **README screenshots:** Dashboard overview, endpoint detail, new session, Auth Vault, and Shadow Domains (`docs/screenshots/`).
+- **Documentation:** Table of contents, architecture diagram, production checklist, troubleshooting guide, First 5 minutes walkthrough, OpenAPI export example, and Security & Data Handling section.
+- **Doc tooling:** `scripts/seed-doc-demo.mjs`, `scripts/capture-doc-screenshots.mjs`, and `docker-compose.docs.yml` for local screenshot regeneration and alternate host ports.
+- **CONTRIBUTING:** Release workflow and screenshot regeneration instructions.
+
+### Changed
+- **README:** Reorganized around Quick Start → Docker Deployment → Hosted → Development; expanded Docker image tag guide (`:beta`, `:latest`, `:vX.Y.Z`) with stable/beta pinning examples.
+- **`.env.example` / `deploy/preview/.env.example`:** Commented blocks for beta, pinned stable, and rolling `:latest` tags.
+- **Troubleshooting:** arm64 GHCR pull errors and Docker `127.0.0.1` vs `host.docker.internal` upstream note.
+
 ## [1.1.1-beta.3] - 2026-06-17
 
 Documentation-only release. No application code changes.

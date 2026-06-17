@@ -122,14 +122,14 @@ CI publishes tags on every push to `main` or `dev`, and on every git release tag
 |-----|----------------|----------|
 | `:beta`, `:dev` | Push to `dev` | Bleeding-edge features; matches the development branch |
 | `:latest`, `:main` | Push to `main` | Current stable line; moves when releases merge to `main` |
-| `:v1.1.0`, `:v1.1.1`, … | Git tag on `main` | **Production pin** — immutable, known-good release |
+| `:v1.1.1`, `:v1.1.0`, … | Git tag on `main` | **Production pin** — immutable, known-good release |
 | `:main-<sha>`, `:dev-<sha>` | Branch push | Debugging a specific CI build |
 
 **Rule of thumb:** use `:beta` to try what's on `dev`, `:latest` to track stable merges, and `:vX.Y.Z` when you want a fixed version that won't change under you.
 
 ### Choosing stable vs beta
 
-Both proxy and dashboard images must use the **same tag family**. Mixing `:beta` proxy with `:v1.1.0` dashboard will cause API mismatches.
+Both proxy and dashboard images must use the **same tag family**. Mixing `:beta` proxy with `:v1.1.1` dashboard will cause API mismatches.
 
 **Beta (default in `.env.example`)** — tracks `dev`, gets new features first:
 
@@ -141,8 +141,8 @@ SHADOWSCHEMA_DASHBOARD_IMAGE=ghcr.io/notfixingit3/shadowschema-dashboard:beta
 **Pinned stable release** — recommended for production and hosted stacks:
 
 ```bash
-SHADOWSCHEMA_IMAGE=ghcr.io/notfixingit3/shadowschema:v1.1.0
-SHADOWSCHEMA_DASHBOARD_IMAGE=ghcr.io/notfixingit3/shadowschema-dashboard:v1.1.0
+SHADOWSCHEMA_IMAGE=ghcr.io/notfixingit3/shadowschema:v1.1.1
+SHADOWSCHEMA_DASHBOARD_IMAGE=ghcr.io/notfixingit3/shadowschema-dashboard:v1.1.1
 ```
 
 **Rolling stable (`:latest`)** — follows `main` without pinning to a semver tag:
@@ -155,8 +155,8 @@ SHADOWSCHEMA_DASHBOARD_IMAGE=ghcr.io/notfixingit3/shadowschema-dashboard:latest
 **One-off without a `.env` file** — pull and run a specific release:
 
 ```bash
-SHADOWSCHEMA_IMAGE=ghcr.io/notfixingit3/shadowschema:v1.1.0 \
-SHADOWSCHEMA_DASHBOARD_IMAGE=ghcr.io/notfixingit3/shadowschema-dashboard:v1.1.0 \
+SHADOWSCHEMA_IMAGE=ghcr.io/notfixingit3/shadowschema:v1.1.1 \
+SHADOWSCHEMA_DASHBOARD_IMAGE=ghcr.io/notfixingit3/shadowschema-dashboard:v1.1.1 \
 docker compose pull && docker compose up -d
 ```
 
@@ -269,7 +269,7 @@ docker compose pull && docker compose up -d
 **Switch from beta to stable** — edit `.env`, then:
 
 ```bash
-# .env now pins v1.1.0
+# .env now pins v1.1.1
 docker compose pull && docker compose up -d
 ```
 
