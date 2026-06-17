@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Changed
-- **Hosted deployment:** Removed Traefik/preview section from public README and deleted `deploy/preview/`; stack configs and tester guide moved to private materials outside the repo.
+- **Hosted deployment:** Preview URL removed from public README/docs; tester guide lives in private materials outside the repo. `deploy/preview/` uses `PREVIEW_HOST` / `CROWDSEC_BOUNCER_KEY` in `.env` (not committed). Vite preview host is opt-in via `VITE_PREVIEW_HOST`.
 
 ## [1.1.2-beta.0] - 2026-06-17
 
