@@ -53,9 +53,10 @@ Pre-built images are published to [GitHub Container Registry](https://github.com
 |-----|----------------|
 | `:beta`, `:dev` | Every push to `dev` |
 | `:latest`, `:main` | Every push to `main` |
-| `:v1.1.0-beta.9` | Git tags (semver) |
+| `:v1.1.0` | Latest stable (git tag) |
+| `:latest` | Every push to `main` |
 
-Pin a release with `SHADOWSCHEMA_IMAGE=ghcr.io/notfixingit3/shadowschema:v1.1.0-beta.9` (see `.env.example`).
+Pin a release with `SHADOWSCHEMA_IMAGE=ghcr.io/notfixingit3/shadowschema:v1.1.0` (see `.env.example`).
 
 ## 🚀 Deployment & Installation
 
@@ -129,8 +130,8 @@ docker compose pull && docker compose up -d
 Pin a known-good release in `.env`:
 
 ```
-SHADOWSCHEMA_IMAGE=ghcr.io/notfixingit3/shadowschema:v1.1.0-beta.9
-SHADOWSCHEMA_DASHBOARD_IMAGE=ghcr.io/notfixingit3/shadowschema-dashboard:v1.1.0-beta.9
+SHADOWSCHEMA_IMAGE=ghcr.io/notfixingit3/shadowschema:v1.1.0
+SHADOWSCHEMA_DASHBOARD_IMAGE=ghcr.io/notfixingit3/shadowschema-dashboard:v1.1.0
 ```
 
 Live preview: https://preview.example.internal

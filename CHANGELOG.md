@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-06-17
+
+Stable release of the v1.1.0 beta cycle.
+
+### Added
+- **WebSocket / WSS recon:** Upgrade detection, frame capture, directional message schemas, and dashboard inspection.
+- **Auth Vault:** Automatic capture and export of auth headers/tokens from intercepted traffic.
+- **SDK generation:** One-click Python, TypeScript, Go, and Rust client zips from the dashboard.
+- **Docker / GHCR deployment:** Pre-built proxy and dashboard images with compose stacks for local and Traefik hosting.
+- **PostgreSQL persistence:** Production Docker stacks store sessions in Postgres; SQLite remains for local dev.
+- **CA cert download:** Dashboard button and `GET /ca-cert` for MITM root trust setup.
+- **Test & CI hardening:** Proxy integration tests, export API coverage, `go vet`, and `gosec` in CI.
+
+### Changed
+- Dashboard serves a production Vite build behind nginx with same-origin export API proxying.
+- Pure-Go SQLite driver (no CGO); CI and release binaries build without gcc.
+
+### Fixed
+- PostgreSQL `pgx` driver registration, proxy latency via debounced spec persistence, Traefik/Vite host blocking, and SDK path-traversal hardening.
+
 ## [1.1.0-beta.9] - 2026-06-17
 
 ### Fixed
