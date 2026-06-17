@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.1.1-beta.2] - 2026-06-17
+
+Documentation-only release. No application code changes.
+
+### Added
+- **README:** Table of contents, architecture (mermaid traffic-flow diagram), production checklist, and troubleshooting table.
+- **CONTRIBUTING:** Release workflow (`dev` → `:beta` → `main` → `:vX.Y.Z` tag).
+
 ## [1.1.1-beta.1] - 2026-06-17
 
 Documentation-only release. No application code changes.

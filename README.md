@@ -14,6 +14,23 @@
 
 ---
 
+## Contents
+
+- [Overview](#overview)
+- [Core Capabilities](#core-capabilities)
+- [Quick Start (Docker)](#quick-start-docker)
+- [Docker Deployment](#docker-deployment)
+- [Architecture](#architecture)
+- [Production Checklist](#production-checklist)
+- [Hosted Deployment (Traefik / preview)](#hosted-deployment-traefik--preview)
+- [Development from Source](#development-from-source)
+- [Usage Examples](#usage-examples)
+- [Spec Extraction](#spec-extraction)
+- [Troubleshooting](#troubleshooting)
+- [Testing](#testing)
+- [Contributing](#contributing)
+- [Legal Disclaimer](#legal-disclaimer)
+
 ## 👁️ Overview
 
 **ShadowSchema** is a specialized, clandestine Man-in-the-Middle (MITM) proxy engineered in Go. Designed for advanced API reconnaissance, it silently intercepts target HTTP/HTTPS telemetry, deduces underlying JSON payloads, and programmatically reconstructs evolving OpenAPI 3.0 specifications on the fly.
@@ -147,6 +164,57 @@ Local `docker compose` runs four services:
 | `SHADOWSCHEMA_DASHBOARD_IMAGE` | `:beta` | Dashboard image tag |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | `shadowschema` | Postgres credentials |
 | `SHADOWSCHEMA_SAVE_DEBOUNCE_MS` | `2000` | Milliseconds between spec DB writes (raise for heavy browsing) |
+
+### Architecture
+
+Traffic splits into two paths: **interception** (clients through the MITM proxy) and **dashboard** (your browser through nginx). Both paths share the same Postgres-backed session store.
+
+```mermaid
+flowchart TB
+  subgraph clients [Intercepted clients]
+    Mobile[Mobile app]
+    BrowserProxy[Browser / curl via proxy]
+  end
+
+  subgraph stack [Docker stack]
+    Nginx[nginx :8080]
+    Dash[dashboard static UI]
+    Proxy[proxy :38080 MITM / :38081 export API]
+    PG[(postgres)]
+  end
+
+  subgraph target [Target infrastructure]
+    API[Remote HTTPS API]
+  end
+
+  subgraph operator [Operator browser]
+    DashBrowser[Dashboard at localhost:8080]
+  end
+
+  Mobile -->|HTTP proxy :38080| Proxy
+  BrowserProxy -->|HTTP proxy :38080| Proxy
+  Proxy -->|forged TLS certs| API
+  Proxy -->|debounced spec writes| PG
+
+  DashBrowser --> Nginx
+  Nginx --> Dash
+  Nginx -->|/export-map /sessions /ca-cert …| Proxy
+  Proxy -->|read/write sessions| PG
+```
+
+**Local ports:** `:8080` dashboard (nginx), `:38080` MITM proxy, `:38081` export API (also proxied through nginx for same-origin dashboard requests). Hosted preview stacks expose only the dashboard via Traefik; the MITM proxy stays internal unless you deliberately publish `:38080`.
+
+### Production Checklist
+
+Before pointing real recon traffic at a hosted or shared stack:
+
+- [ ] **Pin immutable tags** — use `:vX.Y.Z` on both images, not `:beta` or `:latest`, so deploys are predictable.
+- [ ] **Set a strong `POSTGRES_PASSWORD`** — change the default in `.env`; compose rebuilds `DATABASE_URL` for the proxy automatically.
+- [ ] **Keep `:38080` off the public internet** — the MITM proxy should only be reachable from clients you control (lab network, VPN, local machine). The dashboard can be public; the proxy should not.
+- [ ] **Back up `shadowschema-postgres`** — mapped endpoints and sessions live in this volume. CA material is in `shadowschema-certs` (back that up too if you need consistent forged certs across rebuilds).
+- [ ] **Distribute the CA deliberately** — only install `shadowschema-ca.crt` on devices under test; remove it when the engagement ends.
+- [ ] **Match proxy and dashboard tags** — verify with `docker inspect` after every pull (see [Updating and rolling back](#updating-and-rolling-back)).
+- [ ] **Document your active session targets** — endpoints only populate for domains in the active session's target list.
 
 ### Updating and rolling back
 
@@ -316,6 +384,35 @@ The background export server on `:38081` powers the dashboard and CLI tooling:
 | `/sessions/add-target` | POST | Append a domain to the active target list |
 | `/generate-sdk` | POST | Generate a Python, TypeScript, Go, or Rust SDK zip |
 | `/ca-cert` | GET | Download the MITM root CA (`shadowschema-ca.crt`) |
+
+## 🔧 Troubleshooting
+
+| Symptom | Likely cause | Fix |
+|---------|--------------|-----|
+| `ERR_CERT_AUTHORITY_INVALID` / `SEC_ERROR_UNKNOWN_ISSUER` in browser | MITM CA not trusted | Download via **🔒 CA Cert** or `GET /ca-cert`, import into the browser or OS trust store (see [Trust Provisioning](#-trust-provisioning-system-wide) under Usage Examples) |
+| Dashboard loads but endpoint list is empty | No traffic through proxy, wrong session, or domain not in target list | Confirm client uses `127.0.0.1:38080` (or host IP); create/switch session in dashboard; add target domain or promote from Shadow Domains |
+| `curl: (7) Failed to connect` to `:38081` | Proxy container down or port not published | `docker compose ps`; ensure `shadowschema-proxy` is healthy and ports `38080`/`38081` are mapped |
+| Dashboard API errors / blank data after image update | Proxy and dashboard image tags mismatched | Set the same tag family in `.env` for both images, then `docker compose pull && docker compose up -d` |
+| Proxy container exits / `connection refused` to Postgres | Postgres not healthy or wrong credentials | `docker compose logs postgres proxy`; verify `POSTGRES_*` in `.env` matches the existing volume (changing password on an initialized volume requires manual DB fix or a fresh volume) |
+| Interception works but UI feels sluggish | Heavy session with frequent spec writes | Raise `SHADOWSCHEMA_SAVE_DEBOUNCE_MS` (e.g. `5000`) in `.env` and recreate the proxy container |
+| `openapi.json` empty after Ctrl+C | No JSON responses captured yet | Generate traffic against in-scope HTTPS endpoints first; noise rules may be filtering paths |
+| Hosted dashboard works but cannot intercept remotely | MITM port not exposed by design | Proxy must be reachable from the test device — use VPN, SSH tunnel, or lab network access to `:38080`; do not expose it unauthenticated on the public internet |
+
+**Logs:**
+
+```bash
+docker compose logs -f proxy
+docker compose logs -f postgres
+docker compose logs -f nginx
+```
+
+**Reset session data** (destructive — wipes mapped endpoints):
+
+```bash
+docker compose down
+docker volume rm shadowschema-postgres   # only if you intend to start fresh
+docker compose up -d
+```
 
 ## 🧪 Testing
 
