@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.1.1-beta.1] - 2026-06-17
+
+Documentation-only release. No application code changes.
+
+### Changed
+- **README:** Reorganized around Quick Start → Docker Deployment → Hosted → Development. Expanded image tag guide (`:beta`, `:latest`, `:vX.Y.Z`), stable/beta pinning examples, stack layout, env vars, update/rollback, and running-image checks.
+- **`.env.example` / `deploy/preview/.env.example`:** Commented blocks for beta, pinned stable, and rolling `:latest` tags.
+
 ## [1.1.1-beta.0] - 2026-06-17
 
 Development branch opened for v1.1.1 on `dev`.

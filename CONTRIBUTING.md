@@ -16,7 +16,7 @@ First off, thank you for considering contributing to ShadowSchema! It's people l
 
 ### Development Setup
 
-**Contributors** run the Go and Node dev toolchains directly. **End users** should use the pre-built Docker images (`docker compose up` or `deploy/preview/`) — see `README.md`.
+**Contributors** run the Go and Node dev toolchains directly. **End users** should use the pre-built Docker images (`docker compose up` or `deploy/preview/`) — see `README.md` (Quick Start and **Choosing stable vs beta**).
 
 To get started locally:
 1. Clone the repository.
@@ -39,7 +39,7 @@ SHADOWSCHEMA_IMAGE=shadowschema:local SHADOWSCHEMA_DASHBOARD_IMAGE=shadowschema-
 - **Export API / spec logic:** Add tests in `internal/spec/`. Use `newTestSpecManager(t, target)` from `testutil_test.go` so each test gets an isolated SQLite database in a temp directory.
 - **SDK generation:** Tests that call `npx` should skip gracefully when the tool or network is unavailable (`t.Skip`).
 - **Before a release:** Update `CHANGELOG.md`, bump the version in `dashboard/index.html`, and tag with `v*.*.*` to trigger the GitHub release workflow.
-- **Docker images:** `.github/workflows/docker.yml` builds and publishes proxy + dashboard images to GHCR on every push to `main` or `dev` (and on version tags). `dev` gets `:beta` and `:dev`; `main` gets `:latest`.
+- **Docker images:** `.github/workflows/docker.yml` builds and publishes proxy + dashboard images to GHCR on every push to `main` or `dev` (and on version tags). `dev` gets `:beta` and `:dev`; `main` gets `:latest` and `:main`; git tags publish `:vX.Y.Z`. Document tag choices in `README.md` when behavior changes.
 - **preview preview:** Stack lives at `/opt/stacks/shadowschema_preview` on `notfixingit`. Sync `deploy/preview/` (compose, nginx configs, `.env.example` — not the git repo), ensure `.env` exists with `POSTGRES_PASSWORD`, then `docker compose pull && docker compose up -d`. Requires `postgres`, `proxy`, `dashboard`, and `nginx` services; proxy needs `DATABASE_URL` (set automatically by compose).
 
 ### Code of Conduct

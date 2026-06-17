@@ -34,40 +34,14 @@ Built for red teamers, security researchers, and systems architects who need to 
 - **Persistent Sessions:** Automatically stores mapped endpoints and active sessions in PostgreSQL (Docker) or SQLite (local dev), ensuring recon sessions survive shutdowns and restarts.
 - **Progressive Web App (PWA):** Features a sleek, beautiful dashboard to manage target sessions, filter endpoints, and export specifications as JSON.
 
-## 🛠️ Infrastructure Requirements
+## 🚀 Quick Start (Docker)
 
-- **Docker users:** Docker Engine with Compose v2 — includes PostgreSQL; no Go or Node.js required.
-- **Contributors:** Go 1.21+ and Node.js 20+ for local development (see `CONTRIBUTING.md`). Local `go run` uses SQLite; Docker uses PostgreSQL.
-- **Privileges:** Root CA (`certs/ca.crt`) installation capabilities to satisfy client-side SSL validation constraints.
-
-## 🐳 Docker Images
-
-Pre-built images are published to [GitHub Container Registry](https://github.com/notfixingit3/shadowschema/pkgs/container/shadowschema):
-
-| Image | Description |
-|-------|-------------|
-| `ghcr.io/notfixingit3/shadowschema` | MITM proxy + export API (`:38080`, `:38081`) |
-| `ghcr.io/notfixingit3/shadowschema-dashboard` | Production dashboard (static Vite build + nginx on `:8080`) |
-
-| Tag | When published |
-|-----|----------------|
-| `:beta`, `:dev` | Every push to `dev` |
-| `:latest`, `:main` | Every push to `main` |
-| `:v1.1.0` | Latest stable (git tag on `main`) |
-| `:latest`, `:main` | Every push to `main` |
-| `:beta`, `:dev` | Every push to `dev` |
-
-Pin stable: `SHADOWSCHEMA_IMAGE=ghcr.io/notfixingit3/shadowschema:v1.1.0` (see `.env.example`).
-
-## 🚀 Deployment & Installation
-
-### Option 1: Docker Compose (Recommended)
-
-Pull pre-built images and run the full stack locally — no compilation on your machine.
+The fastest path — no Go or Node.js required:
 
 ```bash
 git clone https://github.com/notfixingit3/shadowschema.git
 cd shadowschema
+cp .env.example .env          # optional: pin stable vs beta images
 docker compose pull
 docker compose up -d
 ```
@@ -78,38 +52,147 @@ docker compose up -d
 | MITM proxy | `127.0.0.1:38080` |
 | Export API | http://localhost:38081 |
 
-Session data persists in the `shadowschema-postgres` volume. The MITM CA keypair persists in `shadowschema-certs`.
-
-Copy `.env.example` to `.env` to customize Postgres credentials or pin image tags.
-
-To update after a new release:
-
-```bash
-docker compose pull && docker compose up -d
-```
-
-Download the MITM root CA from the dashboard (**🔒 CA Cert** in the header) or via the export API:
+Download the MITM root CA from the dashboard (**🔒 CA Cert** in the header) or:
 
 ```bash
 curl -fsS http://localhost:38081/ca-cert -o shadowschema-ca.crt
 ```
 
-From a running container:
+Live preview (Traefik): https://preview.example.internal
+
+---
+
+## 🐳 Docker Deployment
+
+### Images
+
+Pre-built images are published to [GitHub Container Registry](https://github.com/notfixingit3/shadowschema/pkgs/container/shadowschema):
+
+| Image | Description |
+|-------|-------------|
+| `ghcr.io/notfixingit3/shadowschema` | MITM proxy + export API (`:38080`, `:38081`) |
+| `ghcr.io/notfixingit3/shadowschema-dashboard` | Production dashboard (static Vite build + nginx on `:8080`) |
+
+### Image tags
+
+CI publishes tags on every push to `main` or `dev`, and on every git release tag:
+
+| Tag | Published when | Best for |
+|-----|----------------|----------|
+| `:beta`, `:dev` | Push to `dev` | Bleeding-edge features; matches the development branch |
+| `:latest`, `:main` | Push to `main` | Current stable line; moves when releases merge to `main` |
+| `:v1.1.0`, `:v1.1.1`, … | Git tag on `main` | **Production pin** — immutable, known-good release |
+| `:main-<sha>`, `:dev-<sha>` | Branch push | Debugging a specific CI build |
+
+**Rule of thumb:** use `:beta` to try what's on `dev`, `:latest` to track stable merges, and `:vX.Y.Z` when you want a fixed version that won't change under you.
+
+### Choosing stable vs beta
+
+Both proxy and dashboard images must use the **same tag family**. Mixing `:beta` proxy with `:v1.1.0` dashboard will cause API mismatches.
+
+**Beta (default in `.env.example`)** — tracks `dev`, gets new features first:
 
 ```bash
-docker cp shadowschema-proxy:/app/certs/ca.crt ./ca.crt
+SHADOWSCHEMA_IMAGE=ghcr.io/notfixingit3/shadowschema:beta
+SHADOWSCHEMA_DASHBOARD_IMAGE=ghcr.io/notfixingit3/shadowschema-dashboard:beta
 ```
 
-### Option 2: preview Preview (Traefik)
+**Pinned stable release** — recommended for production and hosted stacks:
 
-For hosting behind Traefik on the `preview.me` network, use `deploy/preview/`. The stack runs:
+```bash
+SHADOWSCHEMA_IMAGE=ghcr.io/notfixingit3/shadowschema:v1.1.0
+SHADOWSCHEMA_DASHBOARD_IMAGE=ghcr.io/notfixingit3/shadowschema-dashboard:v1.1.0
+```
+
+**Rolling stable (`:latest`)** — follows `main` without pinning to a semver tag:
+
+```bash
+SHADOWSCHEMA_IMAGE=ghcr.io/notfixingit3/shadowschema:latest
+SHADOWSCHEMA_DASHBOARD_IMAGE=ghcr.io/notfixingit3/shadowschema-dashboard:latest
+```
+
+**One-off without a `.env` file** — pull and run a specific release:
+
+```bash
+SHADOWSCHEMA_IMAGE=ghcr.io/notfixingit3/shadowschema:v1.1.0 \
+SHADOWSCHEMA_DASHBOARD_IMAGE=ghcr.io/notfixingit3/shadowschema-dashboard:v1.1.0 \
+docker compose pull && docker compose up -d
+```
+
+Copy `.env.example` to `.env` and uncomment the block that matches your workflow. Root `docker-compose.yml` defaults to `:beta` when no `.env` is present.
+
+### Stack layout
+
+Local `docker compose` runs four services:
 
 | Service | Role |
 |---------|------|
 | `postgres` | Session + spec persistence |
 | `proxy` | MITM on `:38080`, export API on `:38081` |
 | `dashboard` | Static UI (nginx, internal `:8080`) |
-| `nginx` | Same-origin front for Traefik (`preview.example.internal`) |
+| `nginx` | Same-origin front on `localhost:8080` (proxies export API to the dashboard) |
+
+**Volumes:**
+
+| Volume | Contents |
+|--------|----------|
+| `shadowschema-postgres` | Mapped endpoints, sessions, specs |
+| `shadowschema-certs` | MITM CA keypair (survives image updates) |
+
+**Environment variables** (see `.env.example`):
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `SHADOWSCHEMA_IMAGE` | `:beta` | Proxy image tag |
+| `SHADOWSCHEMA_DASHBOARD_IMAGE` | `:beta` | Dashboard image tag |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | `shadowschema` | Postgres credentials |
+| `SHADOWSCHEMA_SAVE_DEBOUNCE_MS` | `2000` | Milliseconds between spec DB writes (raise for heavy browsing) |
+
+### Updating and rolling back
+
+**Pull the tag currently in your `.env`:**
+
+```bash
+docker compose pull && docker compose up -d
+```
+
+**Switch from beta to stable** — edit `.env`, then:
+
+```bash
+# .env now pins v1.1.0
+docker compose pull && docker compose up -d
+```
+
+Postgres data and CA certs are preserved across image changes. Only the application binaries change.
+
+**Roll back** — set the previous `:vX.Y.Z` in `.env` and run `docker compose pull && docker compose up -d` again.
+
+**Check what's running:**
+
+```bash
+docker inspect shadowschema-proxy --format '{{.Config.Image}}'
+docker inspect shadowschema-dashboard --format '{{.Config.Image}}'
+```
+
+### CA certificate
+
+Install the MITM root CA so clients trust intercepted HTTPS:
+
+```bash
+# Export API (works while stack is up)
+curl -fsS http://localhost:38081/ca-cert -o shadowschema-ca.crt
+
+# Or copy from the running container
+docker cp shadowschema-proxy:/app/certs/ca.crt ./ca.crt
+```
+
+> **Migrating from pre-beta.6:** Older stacks used a `shadowschema-data` SQLite volume. Beta.6+ requires Postgres — the first deploy creates a fresh database. CA certs in `shadowschema-certs` are preserved.
+
+---
+
+## 🌐 Hosted Deployment (Traefik / preview)
+
+For hosting behind Traefik on the `preview.me` network, use `deploy/preview/`. The service layout matches local Docker (postgres, proxy, dashboard, nginx) with Traefik labels on nginx instead of a published host port.
 
 **First-time setup:**
 
@@ -117,34 +200,28 @@ For hosting behind Traefik on the `preview.me` network, use `deploy/preview/`. T
 cd deploy/preview
 cp .env.example .env
 # Set POSTGRES_PASSWORD in .env before going live
+# Pin stable tags for production (see .env.example)
 docker compose pull
 docker compose up -d
 ```
 
-**Updates** (after a `dev` push or new tag):
+**Updates** after a new `dev` push or release tag:
 
 ```bash
 cd /opt/stacks/shadowschema_preview   # or your checkout's deploy/preview
 docker compose pull && docker compose up -d
 ```
 
-Pin a known-good release in `.env`:
-
-```
-SHADOWSCHEMA_IMAGE=ghcr.io/notfixingit3/shadowschema:v1.1.0
-SHADOWSCHEMA_DASHBOARD_IMAGE=ghcr.io/notfixingit3/shadowschema-dashboard:v1.1.0
-```
-
 Live preview: https://preview.example.internal
 
-> **Migrating from pre-beta.6:** Older stacks used a `shadowschema-data` SQLite volume. Beta.6+ requires Postgres — the first deploy creates a fresh database. CA certs in `shadowschema-certs` are preserved.
+---
 
-### Option 3: Build from Source (Contributors)
+## 🛠️ Development from Source
 
-For hacking on the proxy or dashboard, run the dev toolchain directly. By default, the proxy loads your last active session from the SQLite database.
+**Contributors** need Go 1.21+ and Node.js 20+ (see `CONTRIBUTING.md`). Local `go run` uses SQLite; Docker uses PostgreSQL.
 
 ```bash
-# MITM engine
+# MITM engine (SQLite at ./shadowschema.db when DATABASE_URL is unset)
 go run main.go
 ```
 
@@ -157,12 +234,17 @@ npm run dev
 
 Navigate to `http://localhost:5173`. From the dashboard you can create Target Sessions, manage noise cancellation rules, explore Shadow Domains, and inspect WebSocket endpoints.
 
-To build images locally:
+**Privileges:** Root CA (`certs/ca.crt`) installation capabilities to satisfy client-side SSL validation constraints.
+
+**Build images locally:**
 
 ```bash
 docker build -t shadowschema:local .
 docker build -f Dockerfile.dashboard -t shadowschema-dashboard:local .
+SHADOWSCHEMA_IMAGE=shadowschema:local SHADOWSCHEMA_DASHBOARD_IMAGE=shadowschema-dashboard:local docker compose up -d
 ```
+
+---
 
 ## 🎮 Usage Examples
 
