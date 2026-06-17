@@ -17,8 +17,10 @@
 ## Contents
 
 - [Overview](#overview)
+- [Screenshots](#screenshots)
 - [Core Capabilities](#core-capabilities)
 - [Quick Start (Docker)](#quick-start-docker)
+- [First 5 Minutes](#first-5-minutes)
 - [Docker Deployment](#docker-deployment)
 - [Architecture](#architecture)
 - [Production Checklist](#production-checklist)
@@ -26,6 +28,7 @@
 - [Development from Source](#development-from-source)
 - [Usage Examples](#usage-examples)
 - [Spec Extraction](#spec-extraction)
+- [Security & Data Handling](#security--data-handling)
 - [Troubleshooting](#troubleshooting)
 - [Testing](#testing)
 - [Contributing](#contributing)
@@ -36,6 +39,18 @@
 **ShadowSchema** is a specialized, clandestine Man-in-the-Middle (MITM) proxy engineered in Go. Designed for advanced API reconnaissance, it silently intercepts target HTTP/HTTPS telemetry, deduces underlying JSON payloads, and programmatically reconstructs evolving OpenAPI 3.0 specifications on the fly.
 
 Built for red teamers, security researchers, and systems architects who need to map undocumented endpoints in real-time.
+
+## Screenshots
+
+Captured from a local Docker stack with synthetic demo traffic (no real target APIs).
+
+| Dashboard | Endpoint detail |
+|-----------|-----------------|
+| ![Dashboard overview with mapped endpoints](docs/screenshots/dashboard-overview.png) | ![Inferred schema and captured headers for a single endpoint](docs/screenshots/endpoint-detail.png) |
+
+| New session | Auth Vault | Shadow Domains |
+|-------------|------------|----------------|
+| ![New Target session modal](docs/screenshots/new-session-modal.png) | ![Captured auth tokens from intercepted traffic](docs/screenshots/vault-modal.png) | ![Out-of-scope domain detection](docs/screenshots/shadow-domains.png) |
 
 ## ⚡ Core Capabilities
 
@@ -76,6 +91,15 @@ curl -fsS http://localhost:38081/ca-cert -o shadowschema-ca.crt
 ```
 
 Live preview (Traefik): https://preview.example.internal
+
+### First 5 Minutes
+
+1. **Start the stack** — `docker compose pull && docker compose up -d` (see [Quick Start](#quick-start-docker)).
+2. **Open the dashboard** — http://localhost:8080 (or http://localhost:8082 if using `docker-compose.docs.yml` for alternate ports).
+3. **Trust the MITM CA** — click **🔒 CA Cert** in the header (or `curl -fsS http://localhost:38081/ca-cert -o shadowschema-ca.crt`) and import it into your browser.
+4. **Create a session** — click **+ New Target**, name it, and enter the API hostname you want to map (e.g. `api.example.com`).
+5. **Route traffic** — point your browser, app, or CLI at the MITM proxy (`127.0.0.1:38080`). In Firefox: Settings → Network Settings → Manual proxy → HTTP `127.0.0.1` port `38080`, also use for HTTPS.
+6. **Watch the map grow** — browse the target app; endpoints appear in the sidebar within a few seconds. Click one to inspect inferred schemas, raw payloads, or export OpenAPI.
 
 ---
 
@@ -137,6 +161,24 @@ docker compose pull && docker compose up -d
 ```
 
 Copy `.env.example` to `.env` and uncomment the block that matches your workflow. Root `docker-compose.yml` defaults to `:beta` when no `.env` is present.
+
+**Apple Silicon / arm64:** GHCR images are currently `linux/amd64` only. On M-series Macs, build locally and run with `--pull never`:
+
+```bash
+docker build -t shadowschema:local .
+docker build -f Dockerfile.dashboard -t shadowschema-dashboard:local .
+SHADOWSCHEMA_IMAGE=shadowschema:local SHADOWSCHEMA_DASHBOARD_IMAGE=shadowschema-dashboard:local \
+  docker compose up -d --pull never
+```
+
+If ports `8080`, `38080`, or `38081` are already taken, add the docs override (maps dashboard to `8082`, proxy to `38082`/`38083`):
+
+```bash
+SHADOWSCHEMA_IMAGE=shadowschema:local SHADOWSCHEMA_DASHBOARD_IMAGE=shadowschema-dashboard:local \
+  docker compose -f docker-compose.yml -f docker-compose.docs.yml up -d --pull never
+```
+
+Regenerate README screenshots locally with `node scripts/seed-doc-demo.mjs` (background) and `node scripts/capture-doc-screenshots.mjs` — see `CONTRIBUTING.md`.
 
 ### Stack layout
 
@@ -369,6 +411,54 @@ curl -s http://localhost:38081/export-map
 
 Alternatively, dispatch a `Ctrl+C` interrupt. ShadowSchema will catch the signal, perform a graceful shutdown, and dump the final footprint directly to `openapi.json` in your current working directory.
 
+**Example export** (trimmed from demo traffic):
+
+```json
+{
+  "openapi": "3.0.0",
+  "info": { "title": "ShadowSchema Auto-Generated API", "version": "1.0.0" },
+  "paths": {
+    "/api/v1/health": {
+      "get": {
+        "parameters": [
+          { "in": "header", "name": "Authorization", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Auto-generated response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string" },
+                    "service": { "type": "string" },
+                    "version": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/users/{id}": {
+      "get": {
+        "x-last-payload": {
+          "id": 42,
+          "name": "Jordan Lee",
+          "email": "jordan@acme-shop.demo",
+          "active": true
+        }
+      }
+    }
+  },
+  "x-shadowschema-vault": [
+    { "header_name": "Authorization", "token_value": "Bearer …" }
+  ]
+}
+```
+
 ### Export API Endpoints
 
 The background export server on `:38081` powers the dashboard and CLI tooling:
@@ -385,6 +475,19 @@ The background export server on `:38081` powers the dashboard and CLI tooling:
 | `/generate-sdk` | POST | Generate a Python, TypeScript, Go, or Rust SDK zip |
 | `/ca-cert` | GET | Download the MITM root CA (`shadowschema-ca.crt`) |
 
+## Security & Data Handling
+
+ShadowSchema is a MITM tool — treat every deployment as sensitive infrastructure.
+
+| Data | Where it lives | Notes |
+|------|----------------|-------|
+| Mapped OpenAPI specs + sessions | Postgres volume (`shadowschema-postgres`) or local `shadowschema.db` (SQLite dev) | Contains inferred schemas and last-seen JSON payloads |
+| Auth Vault entries | Same database, exported via `/vault` | Populated from `Authorization`, `X-Api-Key`, and similar headers |
+| MITM CA private key | `shadowschema-certs` volume (`/app/certs` in the proxy container) | Anyone with this key can forge TLS certs for intercepted clients |
+| Shadow Domains list | In-memory + export API | Hostnames seen via CONNECT outside the active target scope |
+
+**Operational guidance:** pin immutable image tags in production, rotate Postgres credentials, restrict `:38080` to trusted networks, distribute the CA only to devices under test, and back up or destroy volumes when an engagement ends. See the [Production Checklist](#production-checklist).
+
 ## 🔧 Troubleshooting
 
 | Symptom | Likely cause | Fix |
@@ -397,6 +500,8 @@ The background export server on `:38081` powers the dashboard and CLI tooling:
 | Interception works but UI feels sluggish | Heavy session with frequent spec writes | Raise `SHADOWSCHEMA_SAVE_DEBOUNCE_MS` (e.g. `5000`) in `.env` and recreate the proxy container |
 | `openapi.json` empty after Ctrl+C | No JSON responses captured yet | Generate traffic against in-scope HTTPS endpoints first; noise rules may be filtering paths |
 | Hosted dashboard works but cannot intercept remotely | MITM port not exposed by design | Proxy must be reachable from the test device — use VPN, SSH tunnel, or lab network access to `:38080`; do not expose it unauthenticated on the public internet |
+| `no matching manifest for linux/arm64` pulling GHCR images | Published images are amd64-only today | Build locally (`shadowschema:local`) and run with `docker compose up --pull never`, or use `docker-compose.docs.yml` for alternate ports on Mac — see [Docker Deployment](#docker-deployment) |
+| Docker proxy sees requests but dashboard stays empty | Upstream API on host loopback (`127.0.0.1`) | From inside the proxy container, `127.0.0.1` is the container itself — target `host.docker.internal` (OrbStack / Docker Desktop) or publish your mock API on the LAN |
 
 **Logs:**
 

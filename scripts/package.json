@@ -1,0 +1,9 @@
+{
+  "name": "shadowschema-scripts",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "playwright": "^1.52.0",
+    "ws": "^8.18.2"
+  }
+}

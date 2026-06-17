@@ -78,6 +78,27 @@ feature/fix PRs ──► dev ──► :beta / :dev images (every push)
 
 **Post-release on `dev`:** open the next cycle (e.g. `v1.1.2-beta.0`) with a CHANGELOG header and dashboard version bump so `dev` stays ahead of `main`.
 
+### Documentation screenshots
+
+README screenshots live in `docs/screenshots/` and should be refreshed when the dashboard layout changes materially.
+
+**Regenerate locally** (uses synthetic demo traffic — no real APIs):
+
+```bash
+# Build local images on Apple Silicon (GHCR is amd64-only today)
+docker build -t shadowschema:local .
+docker build -f Dockerfile.dashboard -t shadowschema-dashboard:local .
+
+SHADOWSCHEMA_IMAGE=shadowschema:local SHADOWSCHEMA_DASHBOARD_IMAGE=shadowschema-dashboard:local \
+  docker compose -f docker-compose.yml -f docker-compose.docs.yml up -d --pull never
+
+cd scripts && npm install
+node seed-doc-demo.mjs &          # mock API + proxied demo traffic (keep running)
+node capture-doc-screenshots.mjs  # writes docs/screenshots/*.png
+```
+
+Commit updated PNGs with the README change in the same PR.
+
 ### Code of Conduct
 
 Please note that this project is released with a Contributor Code of Conduct. By participating in this project you agree to abide by its terms. Let's build something awesome together!

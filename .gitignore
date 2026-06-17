@@ -32,3 +32,6 @@ certs/
 
 # Exported Spec
 openapi.json
+
+# Doc tooling
+scripts/node_modules/

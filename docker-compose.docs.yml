@@ -1,0 +1,10 @@
+# Local docs/screenshot stack — alternate host ports to avoid conflicts.
+# Usage: docker compose -f docker-compose.yml -f docker-compose.docs.yml up -d
+services:
+  nginx:
+    ports: !override
+      - "8082:80"
+  proxy:
+    ports: !override
+      - "38082:38080"
+      - "38083:38081"
