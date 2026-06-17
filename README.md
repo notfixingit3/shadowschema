@@ -53,10 +53,11 @@ Pre-built images are published to [GitHub Container Registry](https://github.com
 |-----|----------------|
 | `:beta`, `:dev` | Every push to `dev` |
 | `:latest`, `:main` | Every push to `main` |
-| `:v1.1.0` | Latest stable (git tag) |
-| `:latest` | Every push to `main` |
+| `:v1.1.0` | Latest stable (git tag on `main`) |
+| `:latest`, `:main` | Every push to `main` |
+| `:beta`, `:dev` | Every push to `dev` |
 
-Pin a release with `SHADOWSCHEMA_IMAGE=ghcr.io/notfixingit3/shadowschema:v1.1.0` (see `.env.example`).
+Pin stable: `SHADOWSCHEMA_IMAGE=ghcr.io/notfixingit3/shadowschema:v1.1.0` (see `.env.example`).
 
 ## 🚀 Deployment & Installation
 
