@@ -24,7 +24,6 @@
 - [Docker Deployment](#docker-deployment)
 - [Architecture](#architecture)
 - [Production Checklist](#production-checklist)
-- [Hosted Deployment (Traefik / preview)](#hosted-deployment-traefik--preview)
 - [Development from Source](#development-from-source)
 - [Usage Examples](#usage-examples)
 - [Spec Extraction](#spec-extraction)
@@ -89,8 +88,6 @@ Download the MITM root CA from the dashboard (**🔒 CA Cert** in the header) or
 ```bash
 curl -fsS http://localhost:38081/ca-cert -o shadowschema-ca.crt
 ```
-
-Live preview (Traefik): https://preview.example.internal
 
 ### First 5 Minutes
 
@@ -244,7 +241,7 @@ flowchart TB
   Proxy -->|read/write sessions| PG
 ```
 
-**Local ports:** `:8080` dashboard (nginx), `:38080` MITM proxy, `:38081` export API (also proxied through nginx for same-origin dashboard requests). Hosted preview stacks expose only the dashboard via Traefik; the MITM proxy stays internal unless you deliberately publish `:38080`.
+**Local ports:** `:8080` dashboard (nginx), `:38080` MITM proxy, `:38081` export API (also proxied through nginx for same-origin dashboard requests). In reverse-proxy setups, expose only the dashboard — keep the MITM proxy off the public internet unless you deliberately publish `:38080` to trusted clients.
 
 ### Production Checklist
 
@@ -297,32 +294,6 @@ docker cp shadowschema-proxy:/app/certs/ca.crt ./ca.crt
 ```
 
 > **Migrating from pre-beta.6:** Older stacks used a `shadowschema-data` SQLite volume. Beta.6+ requires Postgres — the first deploy creates a fresh database. CA certs in `shadowschema-certs` are preserved.
-
----
-
-## 🌐 Hosted Deployment (Traefik / preview)
-
-For hosting behind Traefik on the `preview.me` network, use `deploy/preview/`. The service layout matches local Docker (postgres, proxy, dashboard, nginx) with Traefik labels on nginx instead of a published host port.
-
-**First-time setup:**
-
-```bash
-cd deploy/preview
-cp .env.example .env
-# Set POSTGRES_PASSWORD in .env before going live
-# Pin stable tags for production (see .env.example)
-docker compose pull
-docker compose up -d
-```
-
-**Updates** after a new `dev` push or release tag:
-
-```bash
-cd /opt/stacks/shadowschema_preview   # or your checkout's deploy/preview
-docker compose pull && docker compose up -d
-```
-
-Live preview: https://preview.example.internal
 
 ---
 
@@ -499,7 +470,7 @@ ShadowSchema is a MITM tool — treat every deployment as sensitive infrastructu
 | Proxy container exits / `connection refused` to Postgres | Postgres not healthy or wrong credentials | `docker compose logs postgres proxy`; verify `POSTGRES_*` in `.env` matches the existing volume (changing password on an initialized volume requires manual DB fix or a fresh volume) |
 | Interception works but UI feels sluggish | Heavy session with frequent spec writes | Raise `SHADOWSCHEMA_SAVE_DEBOUNCE_MS` (e.g. `5000`) in `.env` and recreate the proxy container |
 | `openapi.json` empty after Ctrl+C | No JSON responses captured yet | Generate traffic against in-scope HTTPS endpoints first; noise rules may be filtering paths |
-| Hosted dashboard works but cannot intercept remotely | MITM port not exposed by design | Proxy must be reachable from the test device — use VPN, SSH tunnel, or lab network access to `:38080`; do not expose it unauthenticated on the public internet |
+| Dashboard works remotely but cannot intercept traffic | MITM port not exposed by design | Proxy must be reachable from the test device — use VPN, SSH tunnel, or lab network access to `:38080`; do not expose it unauthenticated on the public internet |
 | `no matching manifest for linux/arm64` pulling GHCR images | Published images are amd64-only today | Build locally (`shadowschema:local`) and run with `docker compose up --pull never`, or use `docker-compose.docs.yml` for alternate ports on Mac — see [Docker Deployment](#docker-deployment) |
 | Docker proxy sees requests but dashboard stays empty | Upstream API on host loopback (`127.0.0.1`) | From inside the proxy container, `127.0.0.1` is the container itself — target `host.docker.internal` (OrbStack / Docker Desktop) or publish your mock API on the LAN |
 
