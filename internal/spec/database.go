@@ -102,6 +102,12 @@ func initPostgresSchema(db *sql.DB) error {
 			first_seen TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 			UNIQUE(session_id, header_name, token_value)
 		)`,
+		`CREATE TABLE IF NOT EXISTS discovered_domains (
+			session_id INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+			host TEXT NOT NULL,
+			first_seen TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			UNIQUE(session_id, host)
+		)`,
 	}
 	for _, stmt := range stmts {
 		if _, err := db.Exec(stmt); err != nil {
@@ -135,6 +141,16 @@ func initSQLiteSchema(db *sql.DB) error {
 	)`)
 	if err != nil {
 		return fmt.Errorf("sqlite auth_vault table: %w", err)
+	}
+
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS discovered_domains (
+		session_id INTEGER,
+		host TEXT,
+		first_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
+		UNIQUE(session_id, host)
+	)`)
+	if err != nil {
+		return fmt.Errorf("sqlite discovered_domains table: %w", err)
 	}
 	return nil
 }

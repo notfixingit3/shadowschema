@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -73,7 +74,7 @@ func (s *SpecManager) LoadLatestOrCreate(target string) {
 			s.SessionID = id
 			s.TargetDomain = t
 			s.IgnoreRules = ignore
-			s.Discovered = make(map[string]bool)
+			s.Discovered = s.loadDiscoveredDomainsLocked(id)
 			return
 		}
 	}
@@ -122,9 +123,50 @@ func (s *SpecManager) AddDiscoveredDomain(host string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	host = strings.Split(host, ":")[0]
-	if !s.Discovered[host] {
-		s.Discovered[host] = true
+	if host == "" || s.Discovered[host] {
+		return
 	}
+	s.Discovered[host] = true
+	_ = s.saveDiscoveredDomain(host)
+}
+
+func (s *SpecManager) loadDiscoveredDomains(sessionID int) map[string]bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.loadDiscoveredDomainsLocked(sessionID)
+}
+
+func (s *SpecManager) loadDiscoveredDomainsLocked(sessionID int) map[string]bool {
+	discovered := make(map[string]bool)
+	rows, err := s.dbQuery(`SELECT host FROM discovered_domains WHERE session_id = ? ORDER BY host`, sessionID)
+	if err != nil {
+		return discovered
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var host string
+		if err := rows.Scan(&host); err == nil && host != "" {
+			discovered[host] = true
+		}
+	}
+	return discovered
+}
+
+func (s *SpecManager) saveDiscoveredDomain(host string) error {
+	if s.dbDriver == driverPostgres {
+		_, err := s.dbExec(
+			`INSERT INTO discovered_domains (session_id, host) VALUES (?, ?) ON CONFLICT DO NOTHING`,
+			s.SessionID, host,
+		)
+		return err
+	}
+
+	_, err := s.dbExec(
+		`INSERT OR IGNORE INTO discovered_domains (session_id, host) VALUES (?, ?)`,
+		s.SessionID, host,
+	)
+	return err
 }
 
 func (s *SpecManager) AddWebSocket(req *http.Request, path string) {
@@ -477,7 +519,9 @@ func (s *SpecManager) mountExportRoutes(mux *http.ServeMux) {
 			keys = append(keys, k)
 		}
 		s.mu.Unlock()
-		
+
+		sort.Strings(keys)
+
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(keys)
 	})
@@ -566,7 +610,7 @@ func (s *SpecManager) mountExportRoutes(mux *http.ServeMux) {
 					s.SessionID = reqData.ID
 					s.TargetDomain = t
 					s.IgnoreRules = ignore
-					s.Discovered = make(map[string]bool)
+					s.Discovered = s.loadDiscoveredDomainsLocked(reqData.ID)
 					_, _ = s.dbExec(`UPDATE sessions SET updated_at = CURRENT_TIMESTAMP WHERE id = ?`, reqData.ID)
 				}
 			}
@@ -646,7 +690,7 @@ func (s *SpecManager) mountExportRoutes(mux *http.ServeMux) {
 						s.SessionID = id
 						s.TargetDomain = target
 						s.IgnoreRules = ignore
-						s.Discovered = make(map[string]bool)
+						s.Discovered = s.loadDiscoveredDomainsLocked(id)
 					}
 				} else {
 					// DB empty, fallback

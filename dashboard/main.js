@@ -842,22 +842,41 @@ async function renderAdminList() {
 }
 
 // Discovered Domains Modal Logic
-viewDomainsBtn.addEventListener('click', async () => {
-  discoveredModal.classList.remove('hidden');
-  await renderDiscoveredList();
-});
-
-ddClose.addEventListener('click', () => {
-  discoveredModal.classList.add('hidden');
-});
+function showDiscoveredPlaceholder(message) {
+  discoveredList.innerHTML = '';
+  const li = document.createElement('li');
+  li.className = 'endpoint-item';
+  li.style.justifyContent = 'center';
+  li.style.color = 'var(--text-muted)';
+  li.style.padding = '1rem';
+  li.textContent = message;
+  discoveredList.appendChild(li);
+}
 
 async function renderDiscoveredList() {
-  discoveredList.innerHTML = '';
+  if (!discoveredList) return;
+
+  showDiscoveredPlaceholder('Loading shadow domains...');
   try {
     const res = await fetch(`${API_URL}/discovered`);
+    if (!res.ok) {
+      showDiscoveredPlaceholder('Failed to load shadow domains.');
+      return;
+    }
+
     const domains = await res.json();
-    
-    statDomains.textContent = domains.length;
+    if (!Array.isArray(domains)) {
+      showDiscoveredPlaceholder('Unexpected response from server.');
+      return;
+    }
+
+    if (statDomains) statDomains.textContent = domains.length;
+    discoveredList.innerHTML = '';
+
+    if (domains.length === 0) {
+      showDiscoveredPlaceholder('No out-of-scope domains detected yet. Route traffic through the proxy to discover shadow domains.');
+      return;
+    }
 
     domains.forEach(d => {
       const li = document.createElement('li');
@@ -867,7 +886,7 @@ async function renderDiscoveredList() {
         <span style="font-family: var(--font-mono); color: var(--text-main);">${d}</span>
         <button class="glass-btn small primary">+ Add to Scope</button>
       `;
-      
+
       const addBtn = li.querySelector('button');
       addBtn.onclick = async () => {
         addBtn.textContent = '...';
@@ -879,19 +898,34 @@ async function renderDiscoveredList() {
         await fetchSpec();
         await renderDiscoveredList();
       };
-      
+
       discoveredList.appendChild(li);
     });
   } catch(err) {
     console.error(err);
+    showDiscoveredPlaceholder('Failed to load shadow domains.');
   }
+}
+
+if (viewDomainsBtn && discoveredModal && ddClose && discoveredList) {
+  viewDomainsBtn.addEventListener('click', async () => {
+    discoveredModal.classList.remove('hidden');
+    await renderDiscoveredList();
+  });
+
+  ddClose.addEventListener('click', () => {
+    discoveredModal.classList.add('hidden');
+  });
 }
 
 async function fetchDiscovered() {
   try {
     const res = await fetch(`${API_URL}/discovered`);
+    if (!res.ok) return;
     const domains = await res.json();
-    statDomains.textContent = domains.length;
+    if (Array.isArray(domains) && statDomains) {
+      statDomains.textContent = domains.length;
+    }
   } catch(err){}
 }
 

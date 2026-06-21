@@ -235,6 +235,25 @@ func TestAddDiscoveredDomainDeduplicatesHosts(t *testing.T) {
 	}
 }
 
+func TestDiscoveredDomainsPersistAcrossReload(t *testing.T) {
+	sm := newTestSpecManager(t, "example.com")
+	sessionID := sm.SessionID
+
+	sm.AddDiscoveredDomain("shadow.example.com:443")
+	sm.AddDiscoveredDomain("other.example.com:8443")
+
+	reloaded := NewSpecManager("example.com")
+	if reloaded.SessionID != sessionID {
+		t.Fatalf("expected session %d, got %d", sessionID, reloaded.SessionID)
+	}
+	if len(reloaded.Discovered) != 2 {
+		t.Fatalf("expected 2 discovered hosts after reload, got %d", len(reloaded.Discovered))
+	}
+	if !reloaded.Discovered["shadow.example.com"] || !reloaded.Discovered["other.example.com"] {
+		t.Fatalf("expected persisted domains in %#v", reloaded.Discovered)
+	}
+}
+
 func TestExportJSONWritesSpecFile(t *testing.T) {
 	sm := newTestSpecManager(t, "example.com")
 
