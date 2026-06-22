@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.1.3-beta.1] - 2026-06-21
+
 ### Fixed
 - **Shadow Domains:** Discovered domains are persisted per session and survive restarts and session switches. The Review modal shows loading, empty, and error states instead of a blank list.
 
