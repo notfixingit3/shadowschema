@@ -120,20 +120,27 @@ func (s *SpecManager) IsTarget(host string) bool {
 }
 
 func (s *SpecManager) AddDiscoveredDomain(host string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	host = strings.Split(host, ":")[0]
-	if host == "" || s.Discovered[host] {
+	if host == "" {
+		return
+	}
+
+	s.mu.Lock()
+	if s.Discovered[host] {
+		s.mu.Unlock()
 		return
 	}
 	s.Discovered[host] = true
-	_ = s.saveDiscoveredDomain(host)
-}
+	sessionID := s.SessionID
+	s.mu.Unlock()
 
-func (s *SpecManager) loadDiscoveredDomains(sessionID int) map[string]bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.loadDiscoveredDomainsLocked(sessionID)
+	if sessionID <= 0 {
+		return
+	}
+
+	go func() {
+		_ = s.persistDiscoveredDomain(sessionID, host)
+	}()
 }
 
 func (s *SpecManager) loadDiscoveredDomainsLocked(sessionID int) map[string]bool {
@@ -153,18 +160,18 @@ func (s *SpecManager) loadDiscoveredDomainsLocked(sessionID int) map[string]bool
 	return discovered
 }
 
-func (s *SpecManager) saveDiscoveredDomain(host string) error {
+func (s *SpecManager) persistDiscoveredDomain(sessionID int, host string) error {
 	if s.dbDriver == driverPostgres {
 		_, err := s.dbExec(
 			`INSERT INTO discovered_domains (session_id, host) VALUES (?, ?) ON CONFLICT DO NOTHING`,
-			s.SessionID, host,
+			sessionID, host,
 		)
 		return err
 	}
 
 	_, err := s.dbExec(
 		`INSERT OR IGNORE INTO discovered_domains (session_id, host) VALUES (?, ?)`,
-		s.SessionID, host,
+		sessionID, host,
 	)
 	return err
 }

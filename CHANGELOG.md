@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.1.3-beta.2] - 2026-06-21
+
+### Fixed
+- **Proxy:** Shadow domain persistence no longer holds the global spec lock during database writes, which could stall MITM traffic under heavy browsing.
+
 ## [1.1.3-beta.1] - 2026-06-21
 
 ### Fixed

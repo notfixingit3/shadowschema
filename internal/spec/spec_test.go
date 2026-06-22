@@ -241,6 +241,7 @@ func TestDiscoveredDomainsPersistAcrossReload(t *testing.T) {
 
 	sm.AddDiscoveredDomain("shadow.example.com:443")
 	sm.AddDiscoveredDomain("other.example.com:8443")
+	time.Sleep(100 * time.Millisecond)
 
 	reloaded := NewSpecManager("example.com")
 	if reloaded.SessionID != sessionID {
