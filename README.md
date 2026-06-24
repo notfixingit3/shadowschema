@@ -27,6 +27,7 @@
 - [Development from Source](#development-from-source)
 - [Usage Examples](#usage-examples)
 - [Spec Extraction](#spec-extraction)
+- [MCP for Coding Agents](#mcp-for-coding-agents)
 - [Security & Data Handling](#security--data-handling)
 - [Troubleshooting](#troubleshooting)
 - [Testing](#testing)
@@ -436,7 +437,10 @@ The background export server on `:38081` powers the dashboard and CLI tooling:
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/export-map` | GET | Live OpenAPI spec (JSON or `?format=yaml`) |
+| `/health` | GET | Export server health, active session metadata, endpoint count (`?session_id=` for read-only other sessions) |
+| `/endpoints` | GET | Lightweight endpoint index (`?path_prefix=`, `?session_id=`) |
+| `/endpoints/{path...}` | GET | Single endpoint detail (e.g. `/endpoints/api/v1/users`) |
+| `/export-map` | GET | Live OpenAPI spec (JSON or `?format=yaml`, `?path_prefix=`, `?session_id=`) |
 | `/vault` | GET | Captured auth credentials |
 | `/discovered` | GET | Out-of-scope domains seen via CONNECT |
 | `/sessions` | GET, POST | List or create recon sessions |
@@ -445,7 +449,19 @@ The background export server on `:38081` powers the dashboard and CLI tooling:
 | `/sessions/delete` | POST | Delete a session |
 | `/sessions/add-target` | POST | Append a domain to the active target list |
 | `/generate-sdk` | POST | Generate a Python, TypeScript, Go, or Rust SDK zip |
+| `/export-replay` | GET, POST | Python replay script for one endpoint (`path`, `method`, optional `session_id`) |
 | `/ca-cert` | GET | Download the MITM root CA (`shadowschema-ca.crt`) |
+
+## MCP for Coding Agents
+
+Expose live API recon to coding agents (Grok Build, OpenCode, Cursor, Claude Code) via the Model Context Protocol.
+
+```bash
+docker compose up -d
+cd mcp && npm install && npm start
+```
+
+Configure your agent using copy-paste templates in [`mcp/docs/agent-setup.md`](mcp/docs/agent-setup.md). Ready-made agent prompts live in [`mcp/docs/recipes.md`](mcp/docs/recipes.md). Run from source (`cd mcp && npm start`) — npm publish is deferred until manual testing is complete.
 
 ## Security & Data Handling
 

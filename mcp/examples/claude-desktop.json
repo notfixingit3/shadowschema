@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "shadowschema": {
+      "command": "npx",
+      "args": ["-y", "@notfixingit3/shadowschema-mcp"],
+      "env": {
+        "SHADOWSCHEMA_EXPORT_URL": "http://localhost:38081"
+      }
+    }
+  }
+}

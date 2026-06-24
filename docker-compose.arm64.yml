@@ -1,0 +1,7 @@
+# Apple Silicon — GHCR images are amd64-only today; run via emulation.
+# Usage: docker compose -f docker-compose.yml -f docker-compose.docs.yml -f docker-compose.arm64.yml up -d
+services:
+  proxy:
+    platform: linux/amd64
+  dashboard:
+    platform: linux/amd64

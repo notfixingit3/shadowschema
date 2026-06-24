@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "shadowschema": {
+      "command": "npm",
+      "args": ["start"],
+      "cwd": "/path/to/shadowschema/mcp",
+      "env": {
+        "SHADOWSCHEMA_EXPORT_URL": "http://localhost:38081"
+      }
+    }
+  }
+}

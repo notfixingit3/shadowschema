@@ -1,0 +1,8 @@
+# Commit as .grok/config.toml in your project repo
+# Full guide: mcp/docs/agent-setup.md
+
+[mcp_servers.shadowschema]
+command = "npx"
+args = ["-y", "@notfixingit3/shadowschema-mcp"]
+env = { SHADOWSCHEMA_EXPORT_URL = "http://localhost:38081" }
+enabled = true

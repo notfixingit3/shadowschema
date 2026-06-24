@@ -1,0 +1,9 @@
+# Append to ~/.grok/config.toml
+# Full guide: mcp/docs/agent-setup.md
+
+[mcp_servers.shadowschema]
+command = "npx"
+args = ["-y", "@notfixingit3/shadowschema-mcp"]
+env = { SHADOWSCHEMA_EXPORT_URL = "http://localhost:38081" }
+enabled = true
+startup_timeout_sec = 60

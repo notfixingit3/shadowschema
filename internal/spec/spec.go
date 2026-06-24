@@ -303,6 +303,8 @@ func (s *SpecManager) AddEndpoint(req *http.Request, path string, body []byte) {
 		operation.Extensions = make(map[string]interface{})
 	}
 	
+	operation.Extensions["x-last-seen"] = time.Now().UTC().Format(time.RFC3339)
+
 	if len(body) > 0 {
 		var raw map[string]interface{}
 		var rawArr []interface{}
@@ -415,6 +417,8 @@ func (s *SpecManager) StartExportServer(port string) {
 
 func (s *SpecManager) mountExportRoutes(mux *http.ServeMux) {
 	s.mountCACertRoute(mux)
+	s.mountHealthAndEndpointRoutes(mux)
+	s.mountReplayRoute(mux)
 
 	mux.HandleFunc("/export-map", func(w http.ResponseWriter, r *http.Request) {
 		enableCORS(w)
@@ -423,8 +427,21 @@ func (s *SpecManager) mountExportRoutes(mux *http.ServeMux) {
 			return
 		}
 
+		sessionID, explicit, err := parseSessionIDQuery(r.URL.Query().Get("session_id"))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		view, err := s.sessionReadView(sessionID, explicit)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+
+		doc := filterDocByPathPrefix(view.Doc, r.URL.Query().Get("path_prefix"))
 		s.mu.Lock()
-		data, err := s.buildExportDocument()
+		data, err := s.buildExportDocumentFrom(doc, view.SessionID)
 		s.mu.Unlock()
 
 		if err != nil {

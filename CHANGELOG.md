@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.1.3-beta.3] - 2026-06-24
+
+### Added
+- **MCP server (`mcp/`):** Model Context Protocol adapter for coding agents (Grok Build, OpenCode, Cursor, Claude Code, VS Code) — 17 tools and 2 resources wrapping the export API for live API recon, endpoint polling, spec diff, Playwright crawl (`shadowschema_explore_target`), and Python replay export.
+- **Export API:** `GET /health`, `GET /endpoints`, `GET /endpoints/{path...}`, `GET/POST /export-replay`; `path_prefix` and read-only `session_id` query params on `/export-map`.
+- **Endpoint metadata:** `x-last-seen` timestamp on intercepted operations for the `/endpoints` index.
+- **Docker:** Optional `mcp` sidecar service (`docker compose --profile mcp`) for isolated MCP/Playwright testing.
+- **Docs:** `mcp/docs/agent-setup.md` (per-host MCP config), `mcp/docs/recipes.md` (copy-paste agent prompts), `todo.md` (MCP implementation plan).
+
+### Changed
+- **README:** MCP section, expanded export API table, link to agent setup and recipes.
+- **`.env.example`:** MCP sidecar environment variable examples.
+
 ## [1.1.3-beta.2] - 2026-06-21
 
 ### Fixed

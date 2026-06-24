@@ -22,6 +22,9 @@ go.work.sum
 ehthumbs.db
 Thumbs.db
 
+# Local environment
+.env
+
 # Database files
 *.db
 *.sqlite
@@ -35,3 +38,5 @@ openapi.json
 
 # Doc tooling
 scripts/node_modules/
+mcp/node_modules/
+mcp/dist/

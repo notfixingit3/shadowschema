@@ -54,6 +54,26 @@ services:
     expose:
       - "8080"
 
+  # Optional dev sidecar — not started by default.
+  # Use: docker compose --profile mcp build mcp
+  #      docker compose --profile mcp run --rm -it mcp
+  # Agents on the host should still use `cd mcp && npm start` (stdio MCP).
+  mcp:
+    build:
+      context: ./mcp
+    profiles: ["mcp"]
+    container_name: shadowschema-mcp
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      SHADOWSCHEMA_EXPORT_URL: ${SHADOWSCHEMA_EXPORT_URL:-http://host.docker.internal:38081}
+      SHADOWSCHEMA_PROXY_URL: ${SHADOWSCHEMA_PROXY_URL:-http://host.docker.internal:38080}
+    stdin_open: true
+    tty: true
+    depends_on:
+      proxy:
+        condition: service_started
+
 volumes:
   shadowschema-postgres:
   shadowschema-certs:

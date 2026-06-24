@@ -9,24 +9,34 @@ import (
 )
 
 func (s *SpecManager) buildExportDocument() ([]byte, error) {
-	raw, err := json.Marshal(s.doc)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.buildExportDocumentFrom(s.doc, s.SessionID)
+}
+
+func (s *SpecManager) buildExportDocumentFrom(doc *openapi3.T, sessionID int) ([]byte, error) {
+	raw, err := json.Marshal(doc)
 	if err != nil {
 		return nil, err
 	}
 
-	var doc openapi3.T
-	if err := json.Unmarshal(raw, &doc); err != nil {
+	var cloned openapi3.T
+	if err := json.Unmarshal(raw, &cloned); err != nil {
 		return nil, err
 	}
 
-	s.enrichExportDocument(&doc)
-	return json.MarshalIndent(&doc, "", "  ")
+	s.enrichExportDocumentForSession(&cloned, sessionID)
+	return json.MarshalIndent(&cloned, "", "  ")
 }
 
 func (s *SpecManager) listVaultCredentials() ([]AuthCredential, error) {
+	return s.listVaultCredentialsForSession(s.SessionID)
+}
+
+func (s *SpecManager) listVaultCredentialsForSession(sessionID int) ([]AuthCredential, error) {
 	rows, err := s.dbQuery(
 		`SELECT header_name, token_value, first_seen FROM auth_vault WHERE session_id = ? ORDER BY first_seen DESC`,
-		s.SessionID,
+		sessionID,
 	)
 	if err != nil {
 		return nil, err
@@ -49,8 +59,8 @@ func (s *SpecManager) listVaultCredentials() ([]AuthCredential, error) {
 	return credentials, nil
 }
 
-func (s *SpecManager) enrichExportDocument(doc *openapi3.T) {
-	credentials, err := s.listVaultCredentials()
+func (s *SpecManager) enrichExportDocumentForSession(doc *openapi3.T, sessionID int) {
+	credentials, err := s.listVaultCredentialsForSession(sessionID)
 	if err != nil || len(credentials) == 0 {
 		return
 	}
