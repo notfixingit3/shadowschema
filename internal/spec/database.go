@@ -65,6 +65,12 @@ func openSQLite() (*sql.DB, string, error) {
 		return nil, "", fmt.Errorf("open sqlite: %w", err)
 	}
 
+	db.SetMaxOpenConns(1)
+	if _, err := db.Exec("PRAGMA busy_timeout = 5000;"); err != nil {
+		_ = db.Close()
+		return nil, "", fmt.Errorf("sqlite pragma: %w", err)
+	}
+
 	if err := initSQLiteSchema(db); err != nil {
 		_ = db.Close()
 		return nil, "", err

@@ -59,7 +59,10 @@ export async function exploreTarget(
   ];
   const seen = new Set<string>();
 
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({
+    headless: true,
+    args: ["--ignore-certificate-errors"],
+  });
   try {
     const context = await browser.newContext({
       proxy: { server: options.proxyUrl },

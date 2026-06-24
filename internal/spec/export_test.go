@@ -10,9 +10,7 @@ func TestBuildExportDocumentIncludesVault(t *testing.T) {
 	sm.SaveVaultCredential("Authorization", "Bearer test-token")
 	sm.SaveVaultCredential("X-Api-Key", "secret-key")
 
-	sm.mu.Lock()
 	data, err := sm.buildExportDocument()
-	sm.mu.Unlock()
 
 	if err != nil {
 		t.Fatalf("buildExportDocument failed: %v", err)

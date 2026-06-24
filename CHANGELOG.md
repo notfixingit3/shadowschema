@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.1.3-beta.4] - 2026-06-24
+
+### Fixed
+- **Proxy/Tests**: Resolved `SQLITE_READONLY` race conditions during concurrent test runs by eliminating global process directory changes (`os.Chdir`), setting isolated SQLite test database paths, and introducing connection pooling serialization/PRAGMA busy timeouts.
+- **Crawler**: Added the `--ignore-certificate-errors` Chromium launch argument to the Playwright crawler, enabling it to successfully bypass SSL validation in local proxy environments.
+
 ## [1.1.3-beta.3] - 2026-06-24
 
 ### Added

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -241,7 +242,18 @@ func TestDiscoveredDomainsPersistAcrossReload(t *testing.T) {
 
 	sm.AddDiscoveredDomain("shadow.example.com:443")
 	sm.AddDiscoveredDomain("other.example.com:8443")
-	time.Sleep(100 * time.Millisecond)
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		var count int
+		if err := sm.dbQueryRow(
+			`SELECT COUNT(*) FROM discovered_domains WHERE session_id = ?`,
+			sessionID,
+		).Scan(&count); err == nil && count == 2 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 
 	reloaded := NewSpecManager("example.com")
 	if reloaded.SessionID != sessionID {
@@ -261,7 +273,7 @@ func TestExportJSONWritesSpecFile(t *testing.T) {
 	req, _ := http.NewRequest(http.MethodGet, "http://example.com/api/ping", nil)
 	sm.AddEndpoint(req, "/api/ping", []byte(`{"ok":true}`))
 
-	filename := "openapi-test.json"
+	filename := filepath.Join(t.TempDir(), "openapi-test.json")
 	if err := sm.ExportJSON(filename); err != nil {
 		t.Fatalf("ExportJSON failed: %v", err)
 	}

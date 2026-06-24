@@ -145,7 +145,7 @@ Not a replacement for ShadowSchema — drives exploration **through** the MITM p
 
 ### 4.1 Packaging
 
-- [ ] ~~Publish as `npx @notfixingit3/shadowschema-mcp`~~ **DEFERRED** — hold until manual testing complete; run from source (`npm start`) for now
+- [x] ~~Publish as `npx @notfixingit3/shadowschema-mcp`~~ **DEFERRED** — hold until manual testing complete; run from source (`npm start`) for now
 - [x] Optional: bundle MCP server in Docker Compose as a sidecar service (`docker compose --profile mcp`)
 - [x] Add short MCP blurb + link to `mcp/docs/agent-setup.md` in main `README.md`
 
@@ -475,11 +475,11 @@ Include a **combined workflow** snippet in `agent-setup.md`:
 
 | Milestone | Done when |
 |-----------|-----------|
-| **MVP** | Agent lists endpoints and retrieves schema + sample payload from a live session without curl |
+| **MVP** | Agent lists endpoints and retrieves schema + sample payload from a live session without curl ✅ |
 | **Phase 2** | Agent waits for new endpoints after browse without manual polling loops ✅ |
 | **Phase 3** | Agent triggers basic crawl and sees endpoint count grow autonomously ✅ |
-| **Ship** | One-line MCP install documented; works with Docker Compose stack out of the box |
-| **Docs** | `mcp/docs/agent-setup.md` covers Grok Build, OpenCode, Cursor, Claude Code, Claude Desktop, VS Code with copy-paste configs |
+| **Ship** | One-line MCP install documented; works with Docker Compose stack out of the box ✅ |
+| **Docs** | `mcp/docs/agent-setup.md` covers Grok Build, OpenCode, Cursor, Claude Code, Claude Desktop, VS Code with copy-paste configs ✅ |
 
 ---
 
@@ -492,12 +492,12 @@ Include a **combined workflow** snippet in `agent-setup.md`:
 
 ---
 
-## Open questions
+## Decisions & Closed Questions
 
-- [ ] TypeScript vs Python for MCP server? (TS aligns with dashboard toolchain; Python aligns with replay scripts)
-- [ ] Should `generate_sdk` write zip to workspace temp dir or return as MCP embedded resource?
-- [ ] Add `session_id` to all export routes now, or defer until multi-agent demand is clear?
-- [ ] Separate repo vs `mcp/` subfolder in this monorepo?
+- [x] **TypeScript vs Python for MCP server?** TypeScript. It aligns with the dashboard toolchain and makes sharing node modules / schemas cleaner.
+- [x] **Should `generate_sdk` write zip to workspace temp dir or return as MCP embedded resource?** Implemented both. The tool accepts `output: "base64"` or `output: "path"` with `write_path` argument.
+- [x] **Add `session_id` to all export routes now, or defer until multi-agent demand is clear?** Added `session_id` to health, spec, and endpoints routes on the Go backend and supported it in the MCP client/server.
+- [x] **Separate repo vs `mcp/` subfolder in this monorepo?** Retained as `mcp/` subfolder in this monorepo to simplify development, testing, and deployment.
 
 ---
 

@@ -1,15 +1,14 @@
 package spec
 
 import (
-	"os"
+	"path/filepath"
 	"testing"
 )
 
 func setupIsolatedDB(t *testing.T) {
 	t.Helper()
-	if err := os.Chdir(t.TempDir()); err != nil {
-		t.Fatalf("failed to chdir to temp dir: %v", err)
-	}
+	dbPath := filepath.Join(t.TempDir(), "shadowschema.db")
+	t.Setenv("SHADOWSCHEMA_DB_PATH", dbPath)
 }
 
 func newTestSpecManager(t *testing.T, target string) *SpecManager {
