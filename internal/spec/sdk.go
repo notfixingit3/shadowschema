@@ -48,7 +48,7 @@ func generateSDKZip(specData []byte, language string) ([]byte, error) {
 
 	outDir := filepath.Join(tmpDir, "out")
 	// #nosec G204 -- generator language is allowlist-validated and paths are temp-dir scoped
-	cmd := exec.Command("npx", "-y", "@openapitools/openapi-generator-cli", "generate", "-i", specFile, "-g", language, "-o", outDir)
+	cmd := exec.Command("npx", "-y", "@openapitools/openapi-generator-cli@2.13.5", "generate", "-i", specFile, "-g", language, "-o", outDir)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return nil, fmt.Errorf("sdk generation failed: %w: %s", err, string(out))
 	}

@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.1.3-beta.5] - 2026-06-24
+
+### Fixed
+- **Nginx Config**: Exposed missing API routes (`/health`, `/endpoints`, and `/export-replay`) to the proxy service block in `default.conf` to avoid fallback routing to the dashboard's HTML.
+- **Node/ESM/Java**: Installed `default-jre-headless` and upgraded Node.js to `v20.x` in the Dockerfile to support OpenAPI SDK generation without Java missing or ESM dependency resolution errors.
+
 ## [1.1.3-beta.4] - 2026-06-24
 
 ### Fixed
