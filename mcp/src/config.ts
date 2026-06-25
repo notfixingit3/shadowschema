@@ -1,6 +1,7 @@
 export interface Config {
   exportUrl: string;
   proxyUrl: string;
+  autoUpdate: boolean;
 }
 
 export function loadConfig(): Config {
@@ -10,5 +11,6 @@ export function loadConfig(): Config {
       "",
     ),
     proxyUrl: process.env.SHADOWSCHEMA_PROXY_URL ?? "http://127.0.0.1:38080",
+    autoUpdate: process.env.SHADOWSCHEMA_AUTO_UPDATE !== "false",
   };
 }

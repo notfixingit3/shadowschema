@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.1.3-beta.6] - 2026-06-25
+
+### Added
+- **MCP Server**: Added background git auto-update and auto-compile capability, ensuring local workspace changes are automatically fetched, checked, and compiled without manual rebuilds. Enabled by default; can be disabled by setting `SHADOWSCHEMA_AUTO_UPDATE=false`.
+
 ## [1.1.3-beta.5] - 2026-06-24
 
 ### Fixed
