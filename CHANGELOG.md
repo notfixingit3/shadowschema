@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.1.3-beta.7] - 2026-06-26
+
+### Added
+- **MCP docs:** Antigravity setup guide and `mcp/examples/antigravity-mcp.json` template.
+- **MCP docs:** `SHADOWSCHEMA_AUTO_UPDATE` and remote-host URL guidance in agent setup docs.
+
+### Fixed
+- **MCP auto-update:** Skip quietly when the current git branch has no upstream (e.g. local-only `dev`) instead of logging `git rev-parse @{u}` failures.
+- **MCP startup:** Document and recommend `node dist/index.js` instead of `npm start` as the MCP command — npm lifecycle banners on stdout break the stdio handshake and leave agents stuck on "initializing".
+
+### Changed
+- **MCP examples:** `dev-from-repo.json` and agent setup instructions now use `node dist/index.js` for all coding-agent MCP configs.
+
 ## [1.1.3-beta.6] - 2026-06-25
 
 ### Added

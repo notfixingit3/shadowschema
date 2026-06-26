@@ -3,7 +3,7 @@
 Connect coding agents to ShadowSchema so they can discover undocumented APIs, read inferred schemas, and build apps against live traffic — without manual dashboard exports.
 
 **Example configs:** [`mcp/examples/`](../examples/)  
-**Implementation status:** Phase 1 MCP server is available in [`mcp/`](../). Run with `cd mcp && npm install && npm start`.
+**Implementation status:** Phase 1 MCP server is available in [`mcp/`](../). Build with `cd mcp && npm install && npm run build`, then launch via `node dist/index.js` in MCP configs.
 
 ---
 
@@ -18,6 +18,7 @@ Connect coding agents to ShadowSchema so they can discover undocumented APIs, re
 - [Claude Code](#claude-code)
 - [Claude Desktop](#claude-desktop)
 - [VS Code (Copilot)](#vs-code-copilot)
+- [Antigravity](#antigravity)
 - [Portable project config](#portable-project-config)
 - [Companion MCPs](#companion-mcps)
 - [Agent recipes](#agent-recipes)
@@ -85,6 +86,9 @@ Set these in each host's MCP `env` block:
 |----------|---------|---------|
 | `SHADOWSCHEMA_EXPORT_URL` | `http://localhost:38081` | Export API base URL |
 | `SHADOWSCHEMA_PROXY_URL` | `http://127.0.0.1:38080` | MITM proxy URL (document to agents for browser setup) |
+| `SHADOWSCHEMA_AUTO_UPDATE` | `true` | When running from a git clone, fetch/pull and rebuild on startup |
+
+If ShadowSchema runs on another machine (e.g. Docker on `10.10.10.89`), set both URLs to that host — export API on port **38081**, proxy on port **38080**.
 
 ---
 
@@ -94,27 +98,27 @@ Set these in each host's MCP `env` block:
 
 npm publish is **deferred** until manual testing is complete. Use a local clone:
 
-Point your config at the repo:
+Build once, then point your MCP config at the compiled entrypoint:
+
+```bash
+cd mcp && npm install && npm run build
+```
 
 ```json
 {
-  "command": "npm",
-  "args": ["start"],
-  "cwd": "/path/to/shadowschema/mcp",
+  "command": "node",
+  "args": ["/path/to/shadowschema/mcp/dist/index.js"],
   "env": {
     "SHADOWSCHEMA_EXPORT_URL": "http://localhost:38081"
   }
 }
 ```
 
-Or run the built binary:
-
-```bash
-cd mcp && npm install && npm run build
-node /path/to/shadowschema/mcp/dist/index.js
-```
+> **Do not use `npm start` as the MCP command.** npm prints lifecycle banners to stdout, which breaks the stdio MCP handshake and leaves agents stuck on "initializing". Use `node dist/index.js` (or `npx tsx src/index.ts` with `cwd` set to `mcp/`) instead. `npm start` is fine for manual terminal testing only.
 
 See [`examples/dev-from-repo.json`](../examples/dev-from-repo.json).
+
+**Auto-update:** Enabled by default when running from a clone. On startup the MCP fetches the remote, pulls if behind, and runs `npm run build`. It skips quietly when the current branch has no upstream (e.g. local-only `dev`). Disable with `"SHADOWSCHEMA_AUTO_UPDATE": "false"` in the MCP `env` block if you do not want background git operations.
 
 ---
 
@@ -347,6 +351,77 @@ Template: [`examples/vscode-mcp.json`](../examples/vscode-mcp.json)
 
 ---
 
+## Antigravity
+
+Antigravity 2.0, IDE, and CLI share a single global MCP config.
+
+### Config file location
+
+| OS | Path |
+|----|------|
+| macOS / Linux | `~/.gemini/config/mcp_config.json` |
+| Windows | `%USERPROFILE%\.gemini\config\mcp_config.json` |
+
+Merge the `shadowschema` entry into the top-level `mcpServers` block:
+
+```json
+{
+  "mcpServers": {
+    "shadowschema": {
+      "command": "npx",
+      "args": ["-y", "@notfixingit3/shadowschema-mcp"],
+      "env": {
+        "SHADOWSCHEMA_EXPORT_URL": "http://localhost:38081"
+      }
+    }
+  }
+}
+```
+
+Template: [`examples/antigravity-mcp.json`](../examples/antigravity-mcp.json)
+
+### Edit from the IDE
+
+1. Open **MCP Servers** via the **...** dropdown at the top of the agent panel.
+2. Click **Manage MCP Servers** → **View raw config**.
+3. Add the `shadowschema` block, save, then click **Refresh** under **Installed MCP Servers**.
+
+### Run from source (before npm publish)
+
+Use a local clone instead of `npx`:
+
+```json
+{
+  "mcpServers": {
+    "shadowschema": {
+      "command": "node",
+      "args": ["/path/to/shadowschema/mcp/dist/index.js"],
+      "env": {
+        "SHADOWSCHEMA_EXPORT_URL": "http://localhost:38081"
+      }
+    }
+  }
+}
+```
+
+See [`examples/dev-from-repo.json`](../examples/dev-from-repo.json). Do not use `npm start` here — see [Launch command](#launch-command).
+
+### Verify
+
+**CLI:** Run `/mcp` and confirm `shadowschema` is listed with its tools.
+
+**IDE / Antigravity 2.0:** Open **Settings** → **Customizations** → **Installed MCP Servers** → **Refresh**. `shadowschema` should appear as connected.
+
+Ask the agent:
+
+> Call shadowschema_list_sessions and show me the result.
+
+### Per-workspace config
+
+Antigravity currently reads MCP servers from the global `mcp_config.json` only — it does not load project-level `.mcp.json` files. Use a distinct server name (e.g. `shadowschema-myproject`) if you need different settings per repo.
+
+---
+
 ## Portable project config
 
 Commit `.mcp.json` at your project root for hosts that read the MCP standard project format (Grok, some Claude tooling):
@@ -367,7 +442,7 @@ Commit `.mcp.json` at your project root for hosts that read the MCP standard pro
 
 Template: [`examples/mcp.json`](../examples/mcp.json)
 
-For team repos, commit alongside `.grok/config.toml` and `.cursor/mcp.json` so everyone gets the server regardless of which agent they use.
+For team repos, commit alongside `.grok/config.toml` and `.cursor/mcp.json` so everyone gets the server regardless of which agent they use. Antigravity users still need to merge the block into `~/.gemini/config/mcp_config.json` manually until per-workspace support lands.
 
 ---
 
@@ -480,6 +555,9 @@ Or log in manually in a headed browser through the proxy, export cookies, and re
 | Endpoints from wrong host | Wrong active session | `shadowschema_switch_session` or create a new session |
 | HTTPS sites fail in browser | CA not trusted | Import `shadowschema-ca.crt` into browser/OS |
 | `localhost` fails on Linux Docker | Host networking quirk | Confirm port `38081` is published; try `127.0.0.1` explicitly |
+| ShadowSchema on a remote host | MCP still points at `localhost` | Set `SHADOWSCHEMA_EXPORT_URL` and `SHADOWSCHEMA_PROXY_URL` to the remote IP (e.g. `http://10.10.10.89:38081`) |
+| Auto-update logs on startup | Running from a local git clone | Expected when upstream exists; harmless. Set `SHADOWSCHEMA_AUTO_UPDATE=false` to disable |
+| Stuck on "initializing" | MCP command is `npm start` | Use `node /path/to/shadowschema/mcp/dist/index.js` instead (`npm run build` first) |
 
 ### Quick health check
 

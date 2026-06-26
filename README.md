@@ -454,14 +454,14 @@ The background export server on `:38081` powers the dashboard and CLI tooling:
 
 ## MCP for Coding Agents
 
-Expose live API recon to coding agents (Grok Build, OpenCode, Cursor, Claude Code) via the Model Context Protocol.
+Expose live API recon to coding agents (Grok Build, OpenCode, Cursor, Claude Code, Antigravity) via the Model Context Protocol.
 
 ```bash
 docker compose up -d
-cd mcp && npm install && npm start
+cd mcp && npm install && npm run build
 ```
 
-Configure your agent using copy-paste templates in [`mcp/docs/agent-setup.md`](mcp/docs/agent-setup.md). Ready-made agent prompts live in [`mcp/docs/recipes.md`](mcp/docs/recipes.md). Run from source (`cd mcp && npm start`) — npm publish is deferred until manual testing is complete.
+Configure your agent using copy-paste templates in [`mcp/docs/agent-setup.md`](mcp/docs/agent-setup.md). Ready-made agent prompts live in [`mcp/docs/recipes.md`](mcp/docs/recipes.md). Point MCP configs at `node mcp/dist/index.js` (run `npm run build` first) — do not use `npm start` as the MCP command; npm publish is deferred until manual testing is complete.
 
 ## Security & Data Handling
 

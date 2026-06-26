@@ -39,9 +39,8 @@ See [docs/agent-setup.md](docs/agent-setup.md) and copy a template from [example
 {
   "mcpServers": {
     "shadowschema": {
-      "command": "npm",
-      "args": ["start"],
-      "cwd": "/path/to/shadowschema/mcp",
+      "command": "node",
+      "args": ["/path/to/shadowschema/mcp/dist/index.js"],
       "env": {
         "SHADOWSCHEMA_EXPORT_URL": "http://localhost:38081"
       }
@@ -49,6 +48,8 @@ See [docs/agent-setup.md](docs/agent-setup.md) and copy a template from [example
   }
 }
 ```
+
+Run `npm run build` in `mcp/` first. Do not use `npm start` as the MCP command — npm prints to stdout and breaks the stdio handshake.
 
 ## Tools
 
@@ -93,6 +94,7 @@ npx playwright install chromium
 |----------|---------|
 | `SHADOWSCHEMA_EXPORT_URL` | `http://localhost:38081` |
 | `SHADOWSCHEMA_PROXY_URL` | `http://127.0.0.1:38080` |
+| `SHADOWSCHEMA_AUTO_UPDATE` | `true` (set `false` to disable) |
 
 ## Development
 
@@ -111,12 +113,12 @@ docker compose --profile mcp build mcp
 docker compose --profile mcp run --rm -it mcp
 ```
 
-Agents on your host should still connect via `npm start` (stdio MCP → `localhost:38081`).
+Agents on your host should connect via `node dist/index.js` (stdio MCP → `localhost:38081`).
 
 ## Docs
 
-- [Agent setup guide](docs/agent-setup.md) — Grok Build, OpenCode, Cursor, Claude, VS Code
+- [Agent setup guide](docs/agent-setup.md) — Grok Build, OpenCode, Cursor, Claude, VS Code, Antigravity
 - [Agent recipes](docs/recipes.md) — copy-paste prompts for map/build, auth, WebSocket
 - [Implementation plan](../todo.md)
 
-> **Distribution:** Run from source (`npm start`) until manual testing is complete. npm publish is intentionally deferred.
+> **Distribution:** Run from source (`node dist/index.js`) until manual testing is complete. npm publish is intentionally deferred.

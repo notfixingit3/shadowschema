@@ -1,6 +1,6 @@
 {
   "name": "@notfixingit3/shadowschema-mcp",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "MCP server for ShadowSchema live API recon and OpenAPI export",
   "type": "module",
   "license": "MIT",

@@ -57,7 +57,7 @@ services:
   # Optional dev sidecar — not started by default.
   # Use: docker compose --profile mcp build mcp
   #      docker compose --profile mcp run --rm -it mcp
-  # Agents on the host should still use `cd mcp && npm start` (stdio MCP).
+  # Agents on the host should use `node mcp/dist/index.js` (stdio MCP; `npm run build` first).
   mcp:
     build:
       context: ./mcp

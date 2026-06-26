@@ -1,8 +1,8 @@
 {
   "mcpServers": {
     "shadowschema": {
-      "command": "node",
-      "args": ["/path/to/shadowschema/mcp/dist/index.js"],
+      "command": "npx",
+      "args": ["-y", "@notfixingit3/shadowschema-mcp"],
       "env": {
         "SHADOWSCHEMA_EXPORT_URL": "http://localhost:38081"
       }

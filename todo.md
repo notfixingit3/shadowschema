@@ -145,7 +145,7 @@ Not a replacement for ShadowSchema — drives exploration **through** the MITM p
 
 ### 4.1 Packaging
 
-- [x] ~~Publish as `npx @notfixingit3/shadowschema-mcp`~~ **DEFERRED** — hold until manual testing complete; run from source (`npm start`) for now
+- [x] ~~Publish as `npx @notfixingit3/shadowschema-mcp`~~ **DEFERRED** — hold until manual testing complete; run from source (`node dist/index.js`) for now
 - [x] Optional: bundle MCP server in Docker Compose as a sidecar service (`docker compose --profile mcp`)
 - [x] Add short MCP blurb + link to `mcp/docs/agent-setup.md` in main `README.md`
 
@@ -479,7 +479,7 @@ Include a **combined workflow** snippet in `agent-setup.md`:
 | **Phase 2** | Agent waits for new endpoints after browse without manual polling loops ✅ |
 | **Phase 3** | Agent triggers basic crawl and sees endpoint count grow autonomously ✅ |
 | **Ship** | One-line MCP install documented; works with Docker Compose stack out of the box ✅ |
-| **Docs** | `mcp/docs/agent-setup.md` covers Grok Build, OpenCode, Cursor, Claude Code, Claude Desktop, VS Code with copy-paste configs ✅ |
+| **Docs** | `mcp/docs/agent-setup.md` covers Grok Build, OpenCode, Cursor, Claude Code, Claude Desktop, VS Code, Antigravity with copy-paste configs ✅ |
 
 ---
 
