@@ -253,7 +253,7 @@ Before pointing real recon traffic at a hosted or shared stack:
 
 - [ ] **Pin immutable tags** — use `:vX.Y.Z` on both images, not `:beta` or `:latest`, so deploys are predictable.
 - [ ] **Set a strong `POSTGRES_PASSWORD`** — change the default in `.env`; compose rebuilds `DATABASE_URL` for the proxy automatically.
-- [ ] **Keep `:38080` and `:38081` off the public internet** — compose binds both to `127.0.0.1` by default. The MITM proxy and export API (vault, CA, specs) should only be reachable from clients you control. Optionally set `SHADOWSCHEMA_EXPORT_TOKEN` so the export API requires a Bearer / `X-ShadowSchema-Token` header.
+- [ ] **Keep `:38080` and `:38081` off the public internet** — compose binds both to `127.0.0.1` by default. The MITM proxy and export API (vault, CA, specs) should only be reachable from clients you control. Optionally set `SHADOWSCHEMA_EXPORT_TOKEN` so the export API requires a Bearer / `X-ShadowSchema-Token` header (headers only — query-string tokens are not accepted).
 - [ ] **Do not share default OpenAPI exports as secret stores** — `/export-map` omits vault token values unless `?include_secrets=1`. Prefer `/vault` locally; strip secrets before publishing specs.
 - [ ] **Back up `shadowschema-postgres`** — mapped endpoints and sessions live in this volume. CA material is in `shadowschema-certs` (back that up too if you need consistent forged certs across rebuilds).
 - [ ] **Distribute the CA deliberately** — only install `shadowschema-ca.crt` on devices under test; remove it when the engagement ends.

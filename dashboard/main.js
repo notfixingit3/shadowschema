@@ -359,10 +359,13 @@ function renderSidebar() {
 
     const displayMethod = displayMethodFor(method, operation);
 
-    li.innerHTML = `
-      <span class="method-badge badge-${displayMethod}">${displayMethod}</span>
-      <span class="endpoint-path-label">${path}</span>
-    `;
+    const methodSpan = document.createElement('span');
+    methodSpan.className = `method-badge badge-${displayMethod}`;
+    methodSpan.textContent = displayMethod;
+    const pathSpan = document.createElement('span');
+    pathSpan.className = 'endpoint-path-label';
+    pathSpan.textContent = path;
+    li.append(methodSpan, pathSpan);
 
     li.onclick = () => {
       selectedPath = path;
@@ -405,16 +408,28 @@ function renderDetails(path, method) {
       const row = document.createElement('div');
       row.className = 'param-row';
       const schemaType = p.schema && p.schema.type ? p.schema.type : 'string';
-      
-      row.innerHTML = `
-        <div class="param-name">${p.name}</div>
-        <div class="param-in">${p.in}</div>
-        <div class="param-type">${schemaType}</div>
-      `;
+
+      const nameEl = document.createElement('div');
+      nameEl.className = 'param-name';
+      nameEl.textContent = p.name || '';
+      const inEl = document.createElement('div');
+      inEl.className = 'param-in';
+      inEl.textContent = p.in || '';
+      const typeEl = document.createElement('div');
+      typeEl.className = 'param-type';
+      typeEl.textContent = schemaType;
+      row.append(nameEl, inEl, typeEl);
       elParams.appendChild(row);
     });
   } else {
-    elParams.innerHTML = `<div style="color: var(--text-muted); font-size: 0.9rem; padding: 1rem;">${isWS ? 'No upgrade query params or Sec-WebSocket headers captured yet.' : 'No parameters detected.'}</div>`;
+    const empty = document.createElement('div');
+    empty.style.color = 'var(--text-muted)';
+    empty.style.fontSize = '0.9rem';
+    empty.style.padding = '1rem';
+    empty.textContent = isWS
+      ? 'No upgrade query params or Sec-WebSocket headers captured yet.'
+      : 'No parameters detected.';
+    elParams.appendChild(empty);
   }
 
   if (isWS) {
@@ -760,12 +775,15 @@ async function renderDiscoveredList() {
       const li = document.createElement('li');
       li.className = 'endpoint-item';
       li.style.justifyContent = 'space-between';
-      li.innerHTML = `
-        <span style="font-family: var(--font-mono); color: var(--text-main);">${d}</span>
-        <button class="glass-btn small primary">+ Add to Scope</button>
-      `;
 
-      const addBtn = li.querySelector('button');
+      const hostSpan = document.createElement('span');
+      hostSpan.style.fontFamily = 'var(--font-mono)';
+      hostSpan.style.color = 'var(--text-main)';
+      hostSpan.textContent = d;
+
+      const addBtn = document.createElement('button');
+      addBtn.className = 'glass-btn small primary';
+      addBtn.textContent = '+ Add to Scope';
       addBtn.onclick = async () => {
         addBtn.textContent = '...';
         await fetch(`${API_URL}/sessions/add-target`, {
@@ -777,6 +795,7 @@ async function renderDiscoveredList() {
         await renderDiscoveredList();
       };
 
+      li.append(hostSpan, addBtn);
       discoveredList.appendChild(li);
     });
   } catch(err) {

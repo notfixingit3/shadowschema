@@ -31,6 +31,16 @@ func TestDeduplicatePath(t *testing.T) {
 			expected: "/api/v1/races/{year}/drivers/{id}",
 		},
 		{
+			name:     "duplicate integer segments get unique names",
+			input:    "/users/1/posts/2/comments/3",
+			expected: "/users/{id}/posts/{id2}/comments/{id3}",
+		},
+		{
+			name:     "two uuids get unique names",
+			input:    "/a/123e4567-e89b-12d3-a456-426614174000/b/123e4567-e89b-12d3-a456-426614174001",
+			expected: "/a/{uuid}/b/{uuid2}",
+		},
+		{
 			name:     "no variables",
 			input:    "/api/v1/status",
 			expected: "/api/v1/status",
@@ -86,5 +96,16 @@ func TestPathParamsFromTemplate(t *testing.T) {
 	}
 	if params[1].Name != "uuid" || params[1].Format != "uuid" {
 		t.Fatalf("unexpected second param: %#v", params[1])
+	}
+
+	duped := PathParamsFromTemplate("/users/{id}/posts/{id2}")
+	if len(duped) != 2 {
+		t.Fatalf("expected 2 unique params, got %d", len(duped))
+	}
+	if duped[0].Name != "id" || duped[0].Schema != "integer" {
+		t.Fatalf("expected id integer, got %#v", duped[0])
+	}
+	if duped[1].Name != "id2" || duped[1].Schema != "integer" {
+		t.Fatalf("expected id2 integer, got %#v", duped[1])
 	}
 }

@@ -2,23 +2,41 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [1.1.3-beta.10] - 2026-07-08
 
 ### Added
 - **Multi-arch Docker images:** CI publishes `linux/amd64` + `linux/arm64` for proxy and dashboard (QEMU + Buildx).
-- **Host-scoped Auth Vault:** Credentials stored per request host; `/vault?host=` and MCP `host` filter; replay prefers target host tokens.
+- **Host-scoped Auth Vault:** Credentials stored per request host; `/vault?host=` and MCP `host` filter; parent-target filters include subdomain tokens; replay prefers host-specific then global.
 - **Dashboard GraphQL panel:** Expandable operations tab with variables + last response.
-- **Dashboard modules:** Split render helpers into `dashboard/modules/` (`highlight`, `graphql`, `websocket`, `vault`).
-- **Vault redaction modes:** `/vault` redacts token values by default; `?include_values=1` returns secrets. MCP `shadowschema_get_vault` defaults to redacted (`include_values: false`).
-- **Secret-safe SDK generation:** `specForSDK` strips vault payloads, last samples, WebSocket frames, and GraphQL op payloads before OpenAPI Generator runs.
-- **Multi-sample observation:** Per-operation `x-hit-count`, `x-status-histogram`, `x-payload-samples` (last 5), `x-param-stats`.
-- **Required / typed params:** Query params infer integer/bool/uuid; params become `required` after consistent observation (min 3 hits, zero misses).
+- **Dashboard modules:** Split helpers into `dashboard/modules/` (`highlight`, `graphql`, `websocket`, `vault`).
+- **Vault redaction modes:** `/vault` redacts token values by default; `?include_values=1` for secrets. MCP defaults to redacted.
+- **Secret-safe SDK generation:** Strips vault payloads, last samples, WS frames, and GraphQL op payloads before OpenAPI Generator.
+- **Multi-sample observation:** `x-hit-count`, `x-status-histogram`, `x-payload-samples` (last 5), `x-param-stats`.
+- **Required / typed params:** Query params infer integer/bool/uuid; `required` after consistent observation (≥3 hits).
 - **Session diff:** `GET|POST /sessions/diff` and MCP `shadowschema_session_diff`.
-- **OpenAPI validate:** `GET|POST /validate-spec` and MCP `shadowschema_validate_spec` (kin-openapi + path-param / servers warnings).
+- **OpenAPI validate:** `GET|POST /validate-spec` and MCP `shadowschema_validate_spec`.
+- **HAR import:** `POST /import-har`, dashboard **📥 HAR**, MCP `shadowschema_import_har`.
+- **GraphQL operation index:** `x-graphql`, `x-graphql-operations`, `x-graphql-operation-names`.
+- **Explore 2.0 (MCP):** `networkidle`, seed URLs, click selectors, allow_hosts.
+- **Request body capture:** `x-last-request-body` + requestBody schema; replay uses request bodies only.
+- **Real status codes:** Including empty `204` and 4xx/5xx with bodies.
+- **Richer path templating:** ULID, ObjectId, undashed UUID, snowflake, hashes, base64url tokens; OpenAPI path params + `servers`.
+
+### Fixed
+- **Unique path param names:** `/users/1/posts/2` → `/users/{id}/posts/{id2}` (no duplicate `{id}`).
+- **Vault host filter:** Parent targets (e.g. `example.com`) resolve credentials captured on subdomains (`api.example.com`).
+- **Session switch/create data loss:** Flush in-memory spec to DB before creating or switching sessions.
+- **Vault write failures:** Logged at warn level instead of silently ignored.
+- **Export API auth:** Tokens accepted only via `Authorization: Bearer` or `X-ShadowSchema-Token` (query-string tokens rejected).
+- **Dashboard XSS hardening:** Endpoint paths, params, and discovered domains use `textContent` instead of unescaped `innerHTML`.
 
 ### Changed
+- **Default export omits secrets:** Security schemes without token values; use `?include_secrets=1` or `/vault`.
+- **Host matching:** Exact host / subdomain rules (no substring false positives).
+- **Session APIs:** Proper 4xx/5xx on create/switch/delete failures.
+- **CORS:** Restricted allowlist (not `*`); compose binds MITM/export to `127.0.0.1`.
 - **MCP:** Version `0.4.1` — 20 tools.
-- **Dashboard:** Vault UI shows host column; replay uses host-filtered vault.
+- **Compose:** MITM (`38080`) and export (`38081`) bound to localhost only.
 
 ## [1.1.3-beta.9] - 2026-07-08
 
@@ -38,7 +56,7 @@ All notable changes to this project will be documented in this file.
 - **Default export omits secrets:** `/export-map` no longer embeds `x-shadowschema-vault` token values; use `?include_secrets=1` or `/vault`. Security schemes are still emitted.
 - **Host matching:** Target domains use exact host / subdomain rules (no substring matching).
 - **Session APIs:** Create/switch/delete return proper 4xx/5xx on failure instead of silent 200.
-- **MCP:** Version `0.4.0` — 18 tools including HAR import and explore 2.0 options.
+- **MCP:** Version `0.3.1` → tools expanded through later betas.
 
 ## [1.1.3-beta.8] - 2026-07-08
 
@@ -80,25 +98,20 @@ All notable changes to this project will be documented in this file.
 ## [1.1.3-beta.3] - 2026-06-24
 
 ### Added
-- **MCP server (`mcp/`):** Model Context Protocol adapter for coding agents (Grok Build, OpenCode, Cursor, Claude Code, VS Code) — 17 tools and 2 resources wrapping the export API for live API recon, endpoint polling, spec diff, Playwright crawl (`shadowschema_explore_target`), and Python replay export.
-- **Export API:** `GET /health`, `GET /endpoints`, `GET /endpoints/{path...}`, `GET/POST /export-replay`; `path_prefix` and read-only `session_id` query params on `/export-map`.
-- **Endpoint metadata:** `x-last-seen` timestamp on intercepted operations for the `/endpoints` index.
-- **Docker:** Optional `mcp` sidecar service (`docker compose --profile mcp`) for isolated MCP/Playwright testing.
-- **Docs:** `mcp/docs/agent-setup.md`, `mcp/docs/recipes.md`, `todo.md` (MCP implementation plan).
-
-### Changed
-- **README:** MCP section, expanded export API table, link to agent setup and recipes.
-- **`.env.example`:** MCP sidecar environment variable examples.
+- **MCP server (`mcp/`):** Model Context Protocol adapter for coding agents — tools wrapping the export API for live API recon, endpoint polling, spec diff, Playwright crawl, and Python replay export.
+- **Export API:** `GET /health`, `GET /endpoints`, `GET /endpoints/{path...}`, `GET/POST /export-replay`.
+- **Docker:** Optional `mcp` sidecar service (`docker compose --profile mcp`).
+- **Docs:** `mcp/docs/agent-setup.md`, `mcp/docs/recipes.md`, `todo.md`.
 
 ## [1.1.3-beta.2] - 2026-06-21
 
 ### Fixed
-- **Proxy:** Shadow domain persistence no longer holds the global spec lock during database writes, which could stall MITM traffic under heavy browsing.
+- **Proxy:** Shadow domain persistence no longer holds the global spec lock during database writes.
 
 ## [1.1.3-beta.1] - 2026-06-21
 
 ### Fixed
-- **Shadow Domains:** Discovered domains are persisted per session and survive restarts and session switches. The Review modal shows loading, empty, and error states instead of a blank list.
+- **Shadow Domains:** Discovered domains are persisted per session and survive restarts and session switches.
 
 ## [1.1.3-beta.0] - 2026-06-17
 

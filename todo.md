@@ -542,7 +542,7 @@ Include a **combined workflow** snippet in `agent-setup.md`:
 - [x] **Query/header typing** — integer/bool/uuid formats for query params from observed values
 - [ ] **Content-Type aware bodies** — form-urlencoded, multipart field names, protobuf/binary hints (don’t force JSON string schema)
 - [ ] **Non-JSON media types** — record `text/*`, XML, protobuf as distinct content types in OpenAPI
-- [ ] **Path param collisions** — when two segments template to the same name (`/{id}/…/{id}`), generate unique names (`id`, `id2`) or semantic names from neighbors
+- [x] **Path param collisions** — unique names (`{id}`, `{id2}`) from DeduplicatePath
 - [ ] **Ignore-rule UX** — validate ignore regex on session create; preset packs (static assets, analytics, well-known noise)
 
 ### Auth & secrets
@@ -638,14 +638,14 @@ Include a **combined workflow** snippet in `agent-setup.md`:
 
 ## Suggested next sprint (opinionated order)
 
-1. [x] **Vault redaction modes + strip secrets from SDK input** — `/vault?include_values=`, MCP default redact, `specForSDK` sanitizes samples/vault
-2. [x] **Multi-sample / required-param inference** — `x-hit-count`, `x-payload-samples`, `x-param-stats`, typed query params, required after consistent hits
-3. [x] **Session diff + OpenAPI validate MCP tools** — `GET /sessions/diff`, `GET /validate-spec`, MCP `session_diff` + `validate_spec`
-4. [x] **Multi-arch Docker** — CI publishes amd64 + arm64
-5. **npm publish MCP** — once soak tests pass on beta.9
-6. [x] **Dashboard modularization + GraphQL ops panel** — modules under `dashboard/modules/`, GraphQL tab
-7. **Stable v1.1.3** after soak
-- [x] **Scoped vault per host** — vault keyed by host; filter via `?host=`
+1. [x] **Vault redaction modes + strip secrets from SDK input**
+2. [x] **Multi-sample / required-param inference**
+3. [x] **Session diff + OpenAPI validate MCP tools**
+4. [x] **Multi-arch Docker**
+5. **npm publish MCP** — once soak tests pass on beta.10
+6. [x] **Dashboard modularization + GraphQL ops panel**
+7. [x] **Unique path params, vault logging, flush-on-switch, no query tokens, dashboard XSS** (beta.10)
+8. **Stable v1.1.3** after soak
 
 ---
 

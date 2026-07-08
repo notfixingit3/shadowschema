@@ -127,7 +127,9 @@ func (s *SpecManager) GetTarget() string {
 func (s *SpecManager) SaveVaultCredential(headerName, tokenValue, host string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	_ = s.saveVaultCredential(http.CanonicalHeaderKey(headerName), tokenValue, normalizeHost(host))
+	if err := s.saveVaultCredential(http.CanonicalHeaderKey(headerName), tokenValue, normalizeHost(host)); err != nil {
+		log.Printf("[WARN] vault save failed (header=%s host=%s): %v", headerName, host, err)
+	}
 }
 
 func (s *SpecManager) IsTarget(host string) bool {
@@ -231,6 +233,8 @@ func (s *SpecManager) AddWebSocket(req *http.Request, path string) {
 	if operation.Description == "" {
 		operation.Description = "Detected WebSocket upgrade on this endpoint."
 	}
+
+	ensurePathParameters(operation, path)
 
 	for key := range req.URL.Query() {
 		exists := false
@@ -609,6 +613,9 @@ func (s *SpecManager) mountExportRoutes(mux *http.ServeMux) {
 				return
 			}
 
+			// Persist in-flight endpoints for the previous active session first.
+			s.Flush()
+
 			s.mu.Lock()
 			s.doc = newEmptySpec(reqData.Target)
 			s.TargetDomain = reqData.Target
@@ -761,6 +768,9 @@ func (s *SpecManager) mountExportRoutes(mux *http.ServeMux) {
 				http.Error(w, "valid id required", http.StatusBadRequest)
 				return
 			}
+
+			// Persist in-flight endpoints before replacing the active session.
+			s.Flush()
 
 			s.mu.Lock()
 			var specJSON string

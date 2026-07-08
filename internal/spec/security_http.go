@@ -78,9 +78,7 @@ func requestHasExportToken(r *http.Request) bool {
 		got := strings.TrimSpace(auth[7:])
 		return got == token
 	}
-	if q := r.URL.Query().Get("token"); q != "" && q == token {
-		return true
-	}
+	// Do not accept tokens via query string — they leak into access logs and Referer.
 	return false
 }
 
