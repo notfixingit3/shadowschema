@@ -35,7 +35,7 @@ export function createServer(
 ): McpServer {
   const server = new McpServer({
     name: "shadowschema-mcp",
-    version: "0.3.1",
+    version: "0.4.0",
   });
 
   server.registerTool(
@@ -430,14 +430,63 @@ export function createServer(
   );
 
   server.registerTool(
+    "shadowschema_import_har",
+    {
+      description: `Import a HAR 1.2 capture into the active ShadowSchema session (offline recon). ${INFERRED_SCHEMA_NOTE} ${LEGAL_NOTE}`,
+      inputSchema: z.object({
+        har_json: z
+          .string()
+          .describe("Full HAR 1.2 JSON document as a string"),
+        only_matching_target: z
+          .boolean()
+          .optional()
+          .default(true)
+          .describe("When true, only import entries whose host matches the session target"),
+      }),
+    },
+    async ({ har_json, only_matching_target }) => {
+      try {
+        const result = await client.importHar(har_json, {
+          onlyMatchingTarget: only_matching_target,
+        });
+        return jsonResult(result);
+      } catch (error) {
+        return toolError(String(error));
+      }
+    },
+  );
+
+  server.registerTool(
     "shadowschema_explore_target",
     {
-      description: `Crawl a target through the ShadowSchema MITM proxy to generate API traffic. ${INFERRED_SCHEMA_NOTE} ${LEGAL_NOTE}`,
+      description: `Crawl a target through the ShadowSchema MITM proxy to generate API traffic (networkidle, seed URLs, click selectors). ${INFERRED_SCHEMA_NOTE} ${LEGAL_NOTE}`,
       inputSchema: z.object({
         start_url: z.string().url().describe("First page to open, e.g. https://app.example.com/"),
         max_pages: z.number().int().positive().optional().default(10),
         max_depth: z.number().int().nonnegative().optional().default(2),
         wait_ms: z.number().int().positive().optional().default(1500),
+        wait_until: z
+          .enum(["domcontentloaded", "load", "networkidle"])
+          .optional()
+          .default("networkidle")
+          .describe("Playwright navigation wait strategy"),
+        seed_urls: z
+          .array(z.string().url())
+          .optional()
+          .describe("Extra absolute URLs to seed (SPA routes / deep links)"),
+        click_selectors: z
+          .array(z.string())
+          .optional()
+          .describe("CSS selectors to click on each page to surface more API calls"),
+        same_origin_only: z
+          .boolean()
+          .optional()
+          .default(true)
+          .describe("Only follow same-origin links unless allow_hosts is set"),
+        allow_hosts: z
+          .array(z.string())
+          .optional()
+          .describe("Extra hostnames allowed when following links"),
         session_id: z.number().int().positive().optional(),
         storage_state_path: z
           .string()
@@ -451,6 +500,11 @@ export function createServer(
       max_pages,
       max_depth,
       wait_ms,
+      wait_until,
+      seed_urls,
+      click_selectors,
+      same_origin_only,
+      allow_hosts,
       session_id,
       storage_state_path,
       ignore_https_errors,
@@ -461,6 +515,11 @@ export function createServer(
           maxPages: max_pages,
           maxDepth: max_depth,
           waitMs: wait_ms,
+          waitUntil: wait_until,
+          seedUrls: seed_urls,
+          clickSelectors: click_selectors,
+          sameOriginOnly: same_origin_only,
+          allowHosts: allow_hosts,
           proxyUrl: client.proxyUrl,
           storageStatePath: storage_state_path,
           ignoreHTTPSErrors: ignore_https_errors,

@@ -22,8 +22,23 @@ import (
 var (
 	targetDomain = flag.String("target", "example.com", "Target domain to intercept and map")
 	port         = flag.String("port", ":38080", "Port to run the MITM proxy on")
-	exportPort   = flag.String("export-port", ":38081", "Port to run the export server on")
+	exportPort   = flag.String("export-port", "", "Port/addr for export server (default :38081 or SHADOWSCHEMA_EXPORT_ADDR)")
 )
+
+// Common auth-related request headers captured into the Auth Vault.
+var vaultAuthHeaders = []string{
+	"Authorization",
+	"X-Api-Key",
+	"X-Auth-Token",
+	"Session-Token",
+	"X-Access-Token",
+	"X-CSRF-Token",
+	"X-XSRF-Token",
+	"Api-Key",
+	"X-Api-Token",
+	"X-Session-Token",
+	"X-Token",
+}
 
 func isPortAvailable(port string) bool {
 	ln, err := net.Listen("tcp", port)
@@ -49,11 +64,13 @@ func (a *ShadowSchemaAddon) Request(f *mitmproxy.Flow) {
 	f.Request.Header.Del("Accept-Encoding")
 
 	// Save credentials if present
-	authHeaders := []string{"Authorization", "X-Api-Key", "X-Auth-Token", "Session-Token"}
-	for _, h := range authHeaders {
+	for _, h := range vaultAuthHeaders {
 		if val := f.Request.Header.Get(h); val != "" {
 			a.specManager.SaveVaultCredential(h, val)
 		}
+	}
+	if cookie := f.Request.Header.Get("Cookie"); cookie != "" {
+		a.specManager.SaveVaultCredential("Cookie", cookie)
 	}
 
 	if strings.ToLower(f.Request.Header.Get("Upgrade")) == "websocket" {
@@ -73,17 +90,35 @@ func (a *ShadowSchemaAddon) Response(f *mitmproxy.Flow) {
 		return
 	}
 
+	// Capture Set-Cookie from responses into the vault (auth establishment).
+	for _, c := range f.Response.Header.Values("Set-Cookie") {
+		if c != "" {
+			a.specManager.SaveVaultCredential("Set-Cookie", c)
+		}
+	}
+
 	// Decode body if it is compressed
 	bodyBytes, err := f.Response.DecodedBody()
 	if err != nil {
 		bodyBytes = f.Response.Body
 	}
 
+	reqBody := f.Request.Body
+	if decoded, err := f.Request.DecodedBody(); err == nil && decoded != nil {
+		reqBody = decoded
+	}
+
 	dedupedPath := router.DeduplicatePath(f.Request.URL.Path)
 	fmt.Printf("[RESP] %-6d %s -> %s\n", f.Response.StatusCode, f.Request.URL.Path, dedupedPath)
 
-	if f.Response.StatusCode >= 200 && f.Response.StatusCode < 300 && len(bodyBytes) > 0 {
-		a.specManager.AddEndpoint(f.Request.Raw(), dedupedPath, bodyBytes)
+	code := f.Response.StatusCode
+	// Map successful responses (including empty 204) and error responses with bodies.
+	// Skip informational (1xx) and redirects (3xx) to reduce noise.
+	switch {
+	case code >= 200 && code < 300:
+		a.specManager.AddEndpoint(f.Request.Raw(), dedupedPath, code, bodyBytes, reqBody)
+	case code >= 400 && code < 600 && len(bodyBytes) > 0:
+		a.specManager.AddEndpoint(f.Request.Raw(), dedupedPath, code, bodyBytes, reqBody)
 	}
 }
 
@@ -151,14 +186,26 @@ func newProxyServer(specManager *spec.SpecManager, port string) (*mitmproxy.Prox
 	return p, nil
 }
 
+func resolveExportAddr() string {
+	if *exportPort != "" {
+		return *exportPort
+	}
+	if addr := strings.TrimSpace(os.Getenv("SHADOWSCHEMA_EXPORT_ADDR")); addr != "" {
+		return addr
+	}
+	return ":38081"
+}
+
 func main() {
 	flag.Parse()
+
+	exportAddr := resolveExportAddr()
 
 	if !isPortAvailable(*port) {
 		log.Fatalf("Proxy port %s is already in use or unavailable\n", *port)
 	}
-	if !isPortAvailable(*exportPort) {
-		log.Fatalf("Export port %s is already in use or unavailable\n", *exportPort)
+	if !isPortAvailable(exportAddr) {
+		log.Fatalf("Export address %s is already in use or unavailable\n", exportAddr)
 	}
 
 	// 1. Initialize CA
@@ -170,7 +217,7 @@ func main() {
 	specManager := spec.NewSpecManager(*targetDomain)
 
 	// Start export server in background
-	go specManager.StartExportServer(*exportPort)
+	go specManager.StartExportServer(exportAddr)
 
 	p, err := newProxyServer(specManager, *port)
 	if err != nil {

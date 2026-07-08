@@ -15,7 +15,7 @@ func certDir() string {
 
 func (s *SpecManager) mountCACertRoute(mux *http.ServeMux) {
 	mux.HandleFunc("/ca-cert", func(w http.ResponseWriter, r *http.Request) {
-		enableCORS(w)
+		enableCORS(w, r)
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)
 			return

@@ -16,7 +16,7 @@ func TestSpecManagerAddEndpoint(t *testing.T) {
 	sm := newTestSpecManager(t, "example.com")
 
 	req1, _ := http.NewRequest(http.MethodGet, "http://example.com/api/users", nil)
-	sm.AddEndpoint(req1, "/api/users", []byte(`{"id": 1, "name": "Alice"}`))
+	sm.AddEndpoint(req1, "/api/users", 200, []byte(`{"id": 1, "name": "Alice"}`), nil)
 
 	pathItem := sm.doc.Paths.Find("/api/users")
 	if pathItem == nil {
@@ -30,7 +30,7 @@ func TestSpecManagerAddEndpoint(t *testing.T) {
 	// Add same endpoint with new fields
 	req2, _ := http.NewRequest(http.MethodGet, "http://example.com/api/users?limit=10", nil)
 	req2.Header.Set("X-Custom-Auth", "secret")
-	sm.AddEndpoint(req2, "/api/users", []byte(`{"id": 2, "name": "Bob", "email": "bob@example.com"}`))
+	sm.AddEndpoint(req2, "/api/users", 200, []byte(`{"id": 2, "name": "Bob", "email": "bob@example.com"}`), nil)
 
 	resp := pathItem.Get.Responses.Value("200")
 	if resp == nil {
@@ -145,7 +145,7 @@ func TestAddEndpointIgnoresStaticAssets(t *testing.T) {
 	sm := newTestSpecManager(t, "example.com")
 
 	req, _ := http.NewRequest(http.MethodGet, "http://example.com/static/logo.png", nil)
-	sm.AddEndpoint(req, "/static/logo.png", []byte(`fake image bytes`))
+	sm.AddEndpoint(req, "/static/logo.png", 200, []byte(`fake image bytes`), nil)
 
 	if sm.doc.Paths.Find("/static/logo.png") != nil {
 		t.Fatalf("expected static asset path to be ignored")
@@ -156,7 +156,7 @@ func TestAddEndpointSupportsPOSTMethod(t *testing.T) {
 	sm := newTestSpecManager(t, "example.com")
 
 	req, _ := http.NewRequest(http.MethodPost, "http://example.com/api/items", nil)
-	sm.AddEndpoint(req, "/api/items", []byte(`{"id": 42}`))
+	sm.AddEndpoint(req, "/api/items", 200, []byte(`{"id": 42}`), nil)
 
 	pathItem := sm.doc.Paths.Find("/api/items")
 	if pathItem == nil || pathItem.Post == nil {
@@ -168,7 +168,7 @@ func TestAddEndpointStoresNonJSONPayload(t *testing.T) {
 	sm := newTestSpecManager(t, "example.com")
 
 	req, _ := http.NewRequest(http.MethodGet, "http://example.com/api/raw", nil)
-	sm.AddEndpoint(req, "/api/raw", []byte(`plain text response`))
+	sm.AddEndpoint(req, "/api/raw", 200, []byte(`plain text response`), nil)
 
 	pathItem := sm.doc.Paths.Find("/api/raw")
 	if pathItem == nil || pathItem.Get == nil {
@@ -186,7 +186,7 @@ func TestAddEndpointCapturesQueryAndHeaderParams(t *testing.T) {
 
 	req, _ := http.NewRequest(http.MethodGet, "http://example.com/api/search?q=shadow&limit=10", nil)
 	req.Header.Set("X-Request-Id", "abc-123")
-	sm.AddEndpoint(req, "/api/search", []byte(`{"results":[]}`))
+	sm.AddEndpoint(req, "/api/search", 200, []byte(`{"results":[]}`), nil)
 
 	pathItem := sm.doc.Paths.Find("/api/search")
 	if pathItem == nil || pathItem.Get == nil {
@@ -217,8 +217,68 @@ func TestIsTargetMatchesCommaSeparatedDomains(t *testing.T) {
 	if !sm.IsTarget("api.example.com:443") {
 		t.Fatalf("expected api.example.com to match target list")
 	}
+	if !sm.IsTarget("cdn.example.com") {
+		t.Fatalf("expected subdomain of example.com to match")
+	}
 	if sm.IsTarget("unrelated.io") {
 		t.Fatalf("expected unrelated.io not to match target list")
+	}
+	if sm.IsTarget("evil-example.com") {
+		t.Fatalf("substring must not match evil-example.com")
+	}
+	if sm.IsTarget("notexample.com") {
+		t.Fatalf("substring must not match notexample.com")
+	}
+}
+
+func TestAddEndpointCapturesRequestBodyAndStatus(t *testing.T) {
+	sm := newTestSpecManager(t, "example.com")
+	req, _ := http.NewRequest(http.MethodPost, "http://example.com/api/users/99", nil)
+	sm.AddEndpoint(req, "/api/users/{id}", 201, []byte(`{"id":99}`), []byte(`{"name":"Ada"}`))
+
+	pathItem := sm.doc.Paths.Find("/api/users/{id}")
+	if pathItem == nil || pathItem.Post == nil {
+		t.Fatal("expected POST /api/users/{id}")
+	}
+	if pathItem.Post.Responses.Value("201") == nil {
+		t.Fatal("expected 201 response entry")
+	}
+	if pathItem.Post.Responses.Value("200") != nil {
+		t.Fatal("should not force status into 200")
+	}
+	reqBody, ok := pathItem.Post.Extensions["x-last-request-body"].(map[string]interface{})
+	if !ok || reqBody["name"] != "Ada" {
+		t.Fatalf("expected request body extension, got %#v", pathItem.Post.Extensions["x-last-request-body"])
+	}
+	if pathItem.Post.RequestBody == nil {
+		t.Fatal("expected inferred requestBody schema")
+	}
+
+	foundPathParam := false
+	for _, p := range pathItem.Post.Parameters {
+		if p.Value != nil && p.Value.In == "path" && p.Value.Name == "id" {
+			foundPathParam = true
+		}
+	}
+	if !foundPathParam {
+		t.Fatal("expected path parameter id")
+	}
+	if len(sm.doc.Servers) == 0 || sm.doc.Servers[0].URL != "https://example.com" {
+		t.Fatalf("expected servers entry, got %#v", sm.doc.Servers)
+	}
+}
+
+func TestAddEndpointEmpty204(t *testing.T) {
+	sm := newTestSpecManager(t, "example.com")
+	req, _ := http.NewRequest(http.MethodDelete, "http://example.com/api/users/1", nil)
+	sm.AddEndpoint(req, "/api/users/{id}", 204, nil, nil)
+
+	pathItem := sm.doc.Paths.Find("/api/users/{id}")
+	if pathItem == nil || pathItem.Delete == nil {
+		t.Fatal("expected DELETE endpoint for empty 204")
+	}
+	if pathItem.Delete.Responses.Value("204") == nil {
+		t.Fatal("expected 204 response")
 	}
 }
 
@@ -271,7 +331,7 @@ func TestExportJSONWritesSpecFile(t *testing.T) {
 	sm := newTestSpecManager(t, "example.com")
 
 	req, _ := http.NewRequest(http.MethodGet, "http://example.com/api/ping", nil)
-	sm.AddEndpoint(req, "/api/ping", []byte(`{"ok":true}`))
+	sm.AddEndpoint(req, "/api/ping", 200, []byte(`{"ok":true}`), nil)
 
 	filename := filepath.Join(t.TempDir(), "openapi-test.json")
 	if err := sm.ExportJSON(filename); err != nil {

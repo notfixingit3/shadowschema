@@ -70,6 +70,42 @@ Note: WebSocket schemas evolve as more frames are observed — treat them as bes
 
 ---
 
+## Import HAR (offline recon)
+
+Map an API from a browser/devtools HAR without live MITM traffic.
+
+```
+Import a HAR capture into ShadowSchema and build a client.
+
+1. shadowschema_create_session — name: "HAR Import", target: api.example.com
+2. shadowschema_import_har — har_json: <paste HAR 1.2 JSON>, only_matching_target: true
+3. shadowschema_list_endpoints — summarize paths/methods imported
+4. For GraphQL paths, shadowschema_get_endpoint and list x-graphql-operation-names
+5. shadowschema_generate_sdk — language: typescript-fetch, output: path
+
+Treat schemas as inferred from the capture, not official docs.
+```
+
+---
+
+## Explore 2.0 (SPA-friendly crawl)
+
+```
+Crawl a SPA through ShadowSchema with seed routes and nav clicks.
+
+1. shadowschema_create_session — target: api.example.com
+2. shadowschema_explore_target —
+   start_url: https://app.example.com/
+   seed_urls: ["https://app.example.com/settings", "https://app.example.com/billing"]
+   wait_until: networkidle
+   click_selectors: ["nav a", "[data-nav]"]
+   max_pages: 25
+3. shadowschema_wait_for_endpoints — min_count: 5, path_prefix: /api
+4. shadowschema_list_endpoints
+```
+
+---
+
 ## Quick health check
 
 ```

@@ -4,7 +4,7 @@ Model Context Protocol server that exposes ShadowSchema's live API recon to codi
 
 ## Status
 
-Phase 3 — 17 tools + 2 resources, including Playwright crawl orchestration and Python replay export.
+Phase 4 — 18 tools + 2 resources: HAR import, GraphQL operation indexing (via export API), Playwright explore 2.0, and Python replay export.
 
 ## Quick start
 
@@ -70,7 +70,8 @@ Run `npm run build` in `mcp/` first. Do not use `npm start` as the MCP command �
 | `shadowschema_get_setup_status` | Export API + proxy reachability and session metadata |
 | `shadowschema_wait_for_endpoints` | Poll until endpoint coverage threshold is met |
 | `shadowschema_spec_diff` | Return newly discovered paths since the last diff |
-| `shadowschema_explore_target` | Headless crawl through MITM proxy to generate traffic |
+| `shadowschema_explore_target` | Headless crawl through MITM proxy (networkidle, seed URLs, click selectors) |
+| `shadowschema_import_har` | Import a HAR 1.2 JSON capture into the active session |
 | `shadowschema_export_replay_script` | Python `requests` replay script for one endpoint |
 
 ### Playwright setup (for `explore_target`)

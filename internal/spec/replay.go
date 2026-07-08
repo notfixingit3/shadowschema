@@ -14,7 +14,7 @@ type replayRequest struct {
 
 func (s *SpecManager) mountReplayRoute(mux *http.ServeMux) {
 	mux.HandleFunc("/export-replay", func(w http.ResponseWriter, r *http.Request) {
-		enableCORS(w)
+		enableCORS(w, r)
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusOK)
 			return
@@ -103,11 +103,16 @@ func buildPythonReplayScript(path, method string, operation map[string]interface
 	b.WriteString(fmt.Sprintf("url = %q\n\n", url))
 	b.WriteString(fmt.Sprintf("headers = %s\n\n", string(headersJSON)))
 
+	// Prefer captured request body; never use response x-last-payload as request body.
 	payloadKwarg := ""
-	if payload, ok := operation["x-last-payload"]; ok && (method == "POST" || method == "PUT" || method == "PATCH") {
-		payloadJSON, _ := json.MarshalIndent(payload, "", "    ")
-		b.WriteString(fmt.Sprintf("payload = %s\n\n", string(payloadJSON)))
-		payloadKwarg = ", json=payload"
+	if method == "POST" || method == "PUT" || method == "PATCH" {
+		if payload, ok := operation["x-last-request-body"]; ok {
+			payloadJSON, _ := json.MarshalIndent(payload, "", "    ")
+			b.WriteString(fmt.Sprintf("payload = %s\n\n", string(payloadJSON)))
+			payloadKwarg = ", json=payload"
+		} else {
+			b.WriteString("# No request body captured for this operation yet\n\n")
+		}
 	}
 
 	b.WriteString(fmt.Sprintf("response = requests.request(%q, url, headers=headers%s)\n\n", method, payloadKwarg))

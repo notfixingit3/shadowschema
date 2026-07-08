@@ -60,6 +60,9 @@ Captured from a local Docker stack with synthetic demo traffic (no real target A
 - **Shadow Domains Tracking:** Automatically detects when the target client communicates with out-of-scope APIs (like CDNs or third-party telemetry) and allows you to instantly add them to your interception perimeter.
 - **Noise Cancellation:** Supports regex-based ignore rules to filter out static assets (`.png`, `.css`) or telemetry paths.
 - **WebSocket & WSS Recon:** Detects `ws://` and `wss://` upgrade handshakes, deduplicates socket paths, captures `Sec-WebSocket-*` headers and query params, reassembles fragmented frames, logs ping/pong/close control traffic, and infers evolving JSON message schemas from live text/binary payloads.
+- **HAR Import:** Offline recon from browser DevTools HAR 1.2 captures (`POST /import-har`, dashboard **📥 HAR**, MCP `shadowschema_import_har`) — same schema/vault pipeline as live MITM.
+- **GraphQL Operation Index:** Detects GraphQL POSTs and indexes operations under `x-graphql-operations` (name, type, variables, last response).
+- **Explore 2.0 (MCP):** Headless crawl with `networkidle`, seed URLs, click selectors, and multi-host allow lists for SPA-friendly traffic generation.
 - **Raw Payload Capture:** In addition to inferring the structural schema, ShadowSchema captures the last seen raw JSON payload for each endpoint so you can inspect actual live data alongside inferred types.
 - **Dynamic Python Replay:** Includes a one-click exporter that parses an intercepted endpoint and its last seen payload directly into a functioning Python `requests` script to immediately replicate API calls.
 - **SDK Generation:** One-click OpenAPI client SDK zips for Python, TypeScript, Go, and Rust via OpenAPI Generator.
@@ -250,7 +253,8 @@ Before pointing real recon traffic at a hosted or shared stack:
 
 - [ ] **Pin immutable tags** — use `:vX.Y.Z` on both images, not `:beta` or `:latest`, so deploys are predictable.
 - [ ] **Set a strong `POSTGRES_PASSWORD`** — change the default in `.env`; compose rebuilds `DATABASE_URL` for the proxy automatically.
-- [ ] **Keep `:38080` off the public internet** — the MITM proxy should only be reachable from clients you control (lab network, VPN, local machine). The dashboard can be public; the proxy should not.
+- [ ] **Keep `:38080` and `:38081` off the public internet** — compose binds both to `127.0.0.1` by default. The MITM proxy and export API (vault, CA, specs) should only be reachable from clients you control. Optionally set `SHADOWSCHEMA_EXPORT_TOKEN` so the export API requires a Bearer / `X-ShadowSchema-Token` header.
+- [ ] **Do not share default OpenAPI exports as secret stores** — `/export-map` omits vault token values unless `?include_secrets=1`. Prefer `/vault` locally; strip secrets before publishing specs.
 - [ ] **Back up `shadowschema-postgres`** — mapped endpoints and sessions live in this volume. CA material is in `shadowschema-certs` (back that up too if you need consistent forged certs across rebuilds).
 - [ ] **Distribute the CA deliberately** — only install `shadowschema-ca.crt` on devices under test; remove it when the engagement ends.
 - [ ] **Match proxy and dashboard tags** — verify with `docker inspect` after every pull (see [Updating and rolling back](#updating-and-rolling-back)).
@@ -425,11 +429,15 @@ Alternatively, dispatch a `Ctrl+C` interrupt. ShadowSchema will catch the signal
       }
     }
   },
-  "x-shadowschema-vault": [
-    { "header_name": "Authorization", "token_value": "Bearer …" }
-  ]
+  "components": {
+    "securitySchemes": {
+      "Authorization": { "type": "http", "scheme": "bearer" }
+    }
+  }
 }
 ```
+
+Default exports include **security scheme names only** — not live token values. Use `/vault` or `?include_secrets=1` when you need credentials locally.
 
 ### Export API Endpoints
 
@@ -440,7 +448,8 @@ The background export server on `:38081` powers the dashboard and CLI tooling:
 | `/health` | GET | Export server health, active session metadata, endpoint count (`?session_id=` for read-only other sessions) |
 | `/endpoints` | GET | Lightweight endpoint index (`?path_prefix=`, `?session_id=`) |
 | `/endpoints/{path...}` | GET | Single endpoint detail (e.g. `/endpoints/api/v1/users`) |
-| `/export-map` | GET | Live OpenAPI spec (JSON or `?format=yaml`, `?path_prefix=`, `?session_id=`) |
+| `/export-map` | GET | Live OpenAPI spec (JSON or `?format=yaml`, `?path_prefix=`, `?session_id=`, `?include_secrets=1` for vault tokens) |
+| `/import-har` | POST | Import HAR 1.2 JSON (raw body or multipart `har`/`file`). Query: `only_matching_target` (default true) |
 | `/vault` | GET | Captured auth credentials |
 | `/discovered` | GET | Out-of-scope domains seen via CONNECT |
 | `/sessions` | GET, POST | List or create recon sessions |
@@ -470,7 +479,7 @@ ShadowSchema is a MITM tool — treat every deployment as sensitive infrastructu
 | Data | Where it lives | Notes |
 |------|----------------|-------|
 | Mapped OpenAPI specs + sessions | Postgres volume (`shadowschema-postgres`) or local `shadowschema.db` (SQLite dev) | Contains inferred schemas and last-seen JSON payloads |
-| Auth Vault entries | Same database, exported via `/vault` | Populated from `Authorization`, `X-Api-Key`, and similar headers |
+| Auth Vault entries | Same database, exported via `/vault` | Populated from `Authorization`, `Cookie`/`Set-Cookie`, `X-Api-Key`, CSRF/session headers, and similar |
 | MITM CA private key | `shadowschema-certs` volume (`/app/certs` in the proxy container) | Anyone with this key can forge TLS certs for intercepted clients |
 | Shadow Domains list | In-memory + export API | Hostnames seen via CONNECT outside the active target scope |
 

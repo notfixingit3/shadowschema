@@ -11,7 +11,17 @@ func (s *SpecManager) loadAndMigrateSpec(sessionID int, specJSON string) (*opena
 	if err != nil {
 		return nil, false
 	}
-	if migrateLegacyWebSocketSpecs(doc) {
+	modified := migrateLegacyWebSocketSpecs(doc)
+	// Backfill servers for older sessions that predate OpenAPI servers support.
+	if doc != nil && len(doc.Servers) == 0 {
+		var target string
+		_ = s.dbQueryRow(`SELECT target FROM sessions WHERE id = ?`, sessionID).Scan(&target)
+		if target != "" {
+			ensureServers(doc, target)
+			modified = true
+		}
+	}
+	if modified {
 		if data, err := json.Marshal(doc); err == nil {
 			_, _ = s.dbExec(`UPDATE sessions SET spec_json = ? WHERE id = ?`, string(data), sessionID)
 		}

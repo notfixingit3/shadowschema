@@ -11,7 +11,7 @@ import (
 func TestHealthEndpointReturnsSessionMetadata(t *testing.T) {
 	sm := newTestSpecManager(t, "example.com")
 	req, _ := http.NewRequest(http.MethodGet, "http://example.com/api/ping", nil)
-	sm.AddEndpoint(req, "/api/ping", []byte(`{"ok":true}`))
+	sm.AddEndpoint(req, "/api/ping", 200, []byte(`{"ok":true}`), nil)
 
 	server := httptest.NewServer(sm.ExportHandler())
 	defer server.Close()
@@ -44,9 +44,9 @@ func TestHealthEndpointReturnsSessionMetadata(t *testing.T) {
 func TestEndpointsIndexSupportsPathPrefix(t *testing.T) {
 	sm := newTestSpecManager(t, "example.com")
 	getReq, _ := http.NewRequest(http.MethodGet, "http://example.com/api/users", nil)
-	sm.AddEndpoint(getReq, "/api/users", []byte(`{"id":1}`))
+	sm.AddEndpoint(getReq, "/api/users", 200, []byte(`{"id":1}`), nil)
 	healthReq, _ := http.NewRequest(http.MethodGet, "http://example.com/health", nil)
-	sm.AddEndpoint(healthReq, "/health", []byte(`{"ok":true}`))
+	sm.AddEndpoint(healthReq, "/health", 200, []byte(`{"ok":true}`), nil)
 
 	server := httptest.NewServer(sm.ExportHandler())
 	defer server.Close()
@@ -78,7 +78,7 @@ func TestEndpointsIndexSupportsPathPrefix(t *testing.T) {
 func TestEndpointDetailRouteReturnsOperations(t *testing.T) {
 	sm := newTestSpecManager(t, "example.com")
 	req, _ := http.NewRequest(http.MethodGet, "http://example.com/api/users", nil)
-	sm.AddEndpoint(req, "/api/users", []byte(`{"id":1}`))
+	sm.AddEndpoint(req, "/api/users", 200, []byte(`{"id":1}`), nil)
 
 	server := httptest.NewServer(sm.ExportHandler())
 	defer server.Close()
@@ -110,9 +110,9 @@ func TestExportMapSupportsPathPrefixAndSessionID(t *testing.T) {
 	sm := newTestSpecManager(t, "example.com")
 
 	req1, _ := http.NewRequest(http.MethodGet, "http://example.com/api/a", nil)
-	sm.AddEndpoint(req1, "/api/a", []byte(`{"a":1}`))
+	sm.AddEndpoint(req1, "/api/a", 200, []byte(`{"a":1}`), nil)
 	req2, _ := http.NewRequest(http.MethodGet, "http://example.com/other", nil)
-	sm.AddEndpoint(req2, "/other", []byte(`{"b":2}`))
+	sm.AddEndpoint(req2, "/other", 200, []byte(`{"b":2}`), nil)
 
 	secondID, err := sm.insertSession("Second", "other.example.com", "", `{"openapi":"3.0.0","info":{"title":"t","version":"1"},"paths":{}}`)
 	if err != nil {

@@ -11,10 +11,10 @@ import (
 func (s *SpecManager) buildExportDocument() ([]byte, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.buildExportDocumentFrom(s.doc, s.SessionID)
+	return s.buildExportDocumentFrom(s.doc, s.SessionID, false)
 }
 
-func (s *SpecManager) buildExportDocumentFrom(doc *openapi3.T, sessionID int) ([]byte, error) {
+func (s *SpecManager) buildExportDocumentFrom(doc *openapi3.T, sessionID int, includeSecrets bool) ([]byte, error) {
 	raw, err := json.Marshal(doc)
 	if err != nil {
 		return nil, err
@@ -25,7 +25,7 @@ func (s *SpecManager) buildExportDocumentFrom(doc *openapi3.T, sessionID int) ([
 		return nil, err
 	}
 
-	s.enrichExportDocumentForSession(&cloned, sessionID)
+	s.enrichExportDocumentForSession(&cloned, sessionID, includeSecrets)
 	return json.MarshalIndent(&cloned, "", "  ")
 }
 
@@ -59,16 +59,14 @@ func (s *SpecManager) listVaultCredentialsForSession(sessionID int) ([]AuthCrede
 	return credentials, nil
 }
 
-func (s *SpecManager) enrichExportDocumentForSession(doc *openapi3.T, sessionID int) {
+// enrichExportDocumentForSession attaches security schemes from the vault.
+// Token values are only included when includeSecrets is true (opt-in via
+// ?include_secrets=1). Default exports never embed live credentials.
+func (s *SpecManager) enrichExportDocumentForSession(doc *openapi3.T, sessionID int, includeSecrets bool) {
 	credentials, err := s.listVaultCredentialsForSession(sessionID)
 	if err != nil || len(credentials) == 0 {
 		return
 	}
-
-	if doc.Extensions == nil {
-		doc.Extensions = make(map[string]interface{})
-	}
-	doc.Extensions["x-shadowschema-vault"] = credentials
 
 	if doc.Components == nil {
 		doc.Components = &openapi3.Components{}
@@ -79,15 +77,49 @@ func (s *SpecManager) enrichExportDocumentForSession(doc *openapi3.T, sessionID 
 
 	for _, credential := range credentials {
 		schemeName := securitySchemeName(credential.HeaderName)
+		schemeType := "apiKey"
+		in := "header"
+		name := credential.HeaderName
+		desc := "Captured auth header name from ShadowSchema Auth Vault (secret values omitted from default export)"
+
+		if strings.EqualFold(credential.HeaderName, "Authorization") {
+			// Prefer http bearer when values look like Bearer tokens.
+			if strings.HasPrefix(strings.ToLower(credential.TokenValue), "bearer ") {
+				doc.Components.SecuritySchemes[schemeName] = &openapi3.SecuritySchemeRef{
+					Value: &openapi3.SecurityScheme{
+						Type:         "http",
+						Scheme:       "bearer",
+						Description:  desc,
+						BearerFormat: "JWT",
+					},
+				}
+				continue
+			}
+		}
+		if strings.EqualFold(credential.HeaderName, "Cookie") {
+			in = "cookie"
+			name = "session"
+			desc = "Cookie-based auth observed via ShadowSchema Auth Vault (values omitted from default export)"
+		}
+
 		doc.Components.SecuritySchemes[schemeName] = &openapi3.SecuritySchemeRef{
 			Value: &openapi3.SecurityScheme{
-				Type:        "apiKey",
-				In:          "header",
-				Name:        credential.HeaderName,
-				Description: "Captured from intercepted traffic via ShadowSchema Auth Vault",
+				Type:        schemeType,
+				In:          in,
+				Name:        name,
+				Description: desc,
 			},
 		}
 	}
+
+	if !includeSecrets {
+		return
+	}
+
+	if doc.Extensions == nil {
+		doc.Extensions = make(map[string]interface{})
+	}
+	doc.Extensions["x-shadowschema-vault"] = credentials
 }
 
 func securitySchemeName(header string) string {

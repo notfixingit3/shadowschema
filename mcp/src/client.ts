@@ -161,6 +161,39 @@ export class ShadowSchemaClient {
     return response.text();
   }
 
+  async importHar(
+    harJson: string | object,
+    options: { onlyMatchingTarget?: boolean } = {},
+  ): Promise<{
+    imported: number;
+    skipped: number;
+    skipped_reasons?: string[];
+    session_id: number;
+    target: string;
+  }> {
+    const body = typeof harJson === "string" ? harJson : JSON.stringify(harJson);
+    const path = this.withQuery("/import-har", {
+      only_matching_target:
+        options.onlyMatchingTarget === false ? "false" : undefined,
+    });
+    const response = await fetch(`${this.config.exportUrl}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`POST /import-har failed (${response.status}): ${text}`);
+    }
+    return response.json() as Promise<{
+      imported: number;
+      skipped: number;
+      skipped_reasons?: string[];
+      session_id: number;
+      target: string;
+    }>;
+  }
+
   async healthCheck(): Promise<{
     ok: boolean;
     endpointCount: number;

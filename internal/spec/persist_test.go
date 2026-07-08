@@ -19,7 +19,7 @@ func TestScheduleSaveDebouncesDatabaseWrites(t *testing.T) {
 	}
 
 	for i := 0; i < 5; i++ {
-		sm.AddEndpoint(req, "/api/users", []byte(`{"id":1}`))
+		sm.AddEndpoint(req, "/api/users", 200, []byte(`{"id":1}`), nil)
 	}
 
 	time.Sleep(50 * time.Millisecond)

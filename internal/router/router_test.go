@@ -40,6 +40,31 @@ func TestDeduplicatePath(t *testing.T) {
 			input:    "/",
 			expected: "/",
 		},
+		{
+			name:     "ulid",
+			input:    "/orders/01ARZ3NDEKTSV4RRFFQ69G5FAV",
+			expected: "/orders/{ulid}",
+		},
+		{
+			name:     "mongo object id",
+			input:    "/docs/507f1f77bcf86cd799439011",
+			expected: "/docs/{objectId}",
+		},
+		{
+			name:     "uuid without dashes",
+			input:    "/items/123e4567e89b12d3a456426614174000",
+			expected: "/items/{uuid}",
+		},
+		{
+			name:     "snowflake id",
+			input:    "/messages/123456789012345678",
+			expected: "/messages/{snowflake}",
+		},
+		{
+			name:     "does not match parent domain words",
+			input:    "/api/v2/users",
+			expected: "/api/v2/users",
+		},
 	}
 
 	for _, tt := range tests {
@@ -48,5 +73,18 @@ func TestDeduplicatePath(t *testing.T) {
 				t.Errorf("DeduplicatePath(%q) = %q, want %q", tt.input, got, tt.expected)
 			}
 		})
+	}
+}
+
+func TestPathParamsFromTemplate(t *testing.T) {
+	params := PathParamsFromTemplate("/api/users/{id}/orders/{uuid}")
+	if len(params) != 2 {
+		t.Fatalf("expected 2 params, got %d", len(params))
+	}
+	if params[0].Name != "id" || params[0].Schema != "integer" {
+		t.Fatalf("unexpected first param: %#v", params[0])
+	}
+	if params[1].Name != "uuid" || params[1].Format != "uuid" {
+		t.Fatalf("unexpected second param: %#v", params[1])
 	}
 }

@@ -67,10 +67,13 @@ export function generatePythonReplayScript(input: ReplayScriptInput): string {
   let script = `import requests\nimport json\n\nurl = "${url}"\n\nheaders = ${JSON.stringify(headers, null, 4)}\n\n`;
 
   let payloadKwarg = "";
-  const payload = input.operation["x-last-payload"];
+  // Prefer captured request body — never use response x-last-payload as request body.
+  const payload = input.operation["x-last-request-body"];
   if (["POST", "PUT", "PATCH"].includes(method) && payload !== undefined) {
     script += `payload = ${JSON.stringify(payload, null, 4)}\n\n`;
     payloadKwarg = ", json=payload";
+  } else if (["POST", "PUT", "PATCH"].includes(method)) {
+    script += `# No request body captured for this operation yet\n\n`;
   }
 
   const vaultNote =

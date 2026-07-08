@@ -248,7 +248,7 @@ func filterDocByPathPrefix(doc *openapi3.T, pathPrefix string) *openapi3.T {
 
 func (s *SpecManager) mountHealthAndEndpointRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		enableCORS(w)
+		enableCORS(w, r)
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusOK)
 			return
@@ -275,7 +275,7 @@ func (s *SpecManager) mountHealthAndEndpointRoutes(mux *http.ServeMux) {
 	})
 
 	mux.HandleFunc("/endpoints", func(w http.ResponseWriter, r *http.Request) {
-		enableCORS(w)
+		enableCORS(w, r)
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusOK)
 			return
@@ -309,7 +309,7 @@ func (s *SpecManager) mountHealthAndEndpointRoutes(mux *http.ServeMux) {
 	})
 
 	mux.HandleFunc("/endpoints/{path...}", func(w http.ResponseWriter, r *http.Request) {
-		enableCORS(w)
+		enableCORS(w, r)
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusOK)
 			return

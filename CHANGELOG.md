@@ -2,7 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [1.1.3-beta.9] - 2026-07-08
+
+### Added
+- **HAR import:** `POST /import-har` accepts HAR 1.2 JSON (raw or multipart). Maps matching entries into the active session (schemas, vault, path dedupe). Dashboard **📥 HAR** button and MCP `shadowschema_import_har`.
+- **GraphQL operation index:** GraphQL POSTs get `x-graphql`, `x-graphql-operations`, and `x-graphql-operation-names` (operationName, type, fields, variables, last response).
+- **Explore 2.0 (MCP):** `networkidle` default wait, `seed_urls`, `click_selectors`, `same_origin_only`, `allow_hosts`, SPA frame navigation hooks, click counters.
+- **Request body capture:** Intercepted request bodies stored as `x-last-request-body` with inferred `requestBody` schemas; replay scripts use request bodies only.
+- **Real status codes:** Endpoints keyed by observed HTTP status (including empty `204`); 4xx/5xx with bodies mapped for error schemas.
+- **Richer path templating:** ULID, Mongo ObjectId, undashed UUID, snowflake IDs, SHA hashes, and high-entropy base64url tokens; path parameters declared on OpenAPI operations.
+- **OpenAPI `servers`:** Specs include `https://` base URL from the primary session target.
+- **Export auth/CORS:** Optional `SHADOWSCHEMA_EXPORT_TOKEN`; restricted CORS origins (not `*`); compose binds `:38080`/`:38081` to `127.0.0.1`.
+- **Auth vault coverage:** Cookie, Set-Cookie, CSRF/session headers (`X-Access-Token`, `X-CSRF-Token`, etc.).
+- **Schema merge improvements:** Array item merging, nullable fields, `oneOf` on type conflicts, string `format` hints (uuid, date-time, email, uri).
+
+### Changed
+- **Default export omits secrets:** `/export-map` no longer embeds `x-shadowschema-vault` token values; use `?include_secrets=1` or `/vault`. Security schemes are still emitted.
+- **Host matching:** Target domains use exact host / subdomain rules (no substring matching).
+- **Session APIs:** Create/switch/delete return proper 4xx/5xx on failure instead of silent 200.
+- **MCP:** Version `0.4.0` — 18 tools including HAR import and explore 2.0 options.
 
 ## [1.1.3-beta.8] - 2026-07-08
 
@@ -48,7 +66,7 @@ All notable changes to this project will be documented in this file.
 - **Export API:** `GET /health`, `GET /endpoints`, `GET /endpoints/{path...}`, `GET/POST /export-replay`; `path_prefix` and read-only `session_id` query params on `/export-map`.
 - **Endpoint metadata:** `x-last-seen` timestamp on intercepted operations for the `/endpoints` index.
 - **Docker:** Optional `mcp` sidecar service (`docker compose --profile mcp`) for isolated MCP/Playwright testing.
-- **Docs:** `mcp/docs/agent-setup.md` (per-host MCP config), `mcp/docs/recipes.md` (copy-paste agent prompts), `todo.md` (MCP implementation plan).
+- **Docs:** `mcp/docs/agent-setup.md`, `mcp/docs/recipes.md`, `todo.md` (MCP implementation plan).
 
 ### Changed
 - **README:** MCP section, expanded export API table, link to agent setup and recipes.

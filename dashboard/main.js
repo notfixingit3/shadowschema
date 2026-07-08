@@ -69,6 +69,48 @@ const vaultModal = document.getElementById('vault-modal');
 const vaultClose = document.getElementById('vault-close');
 const vaultList = document.getElementById('vault-list');
 
+// HAR import
+const importHarBtn = document.getElementById('import-har-btn');
+const importHarInput = document.getElementById('import-har-input');
+if (importHarBtn && importHarInput) {
+  importHarBtn.addEventListener('click', () => importHarInput.click());
+  importHarInput.addEventListener('change', async () => {
+    const file = importHarInput.files && importHarInput.files[0];
+    importHarInput.value = '';
+    if (!file) return;
+    const original = importHarBtn.textContent;
+    importHarBtn.textContent = 'Importing…';
+    importHarBtn.disabled = true;
+    try {
+      const text = await file.text();
+      const res = await fetch(`${API_URL}/import-har?only_matching_target=true`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: text,
+      });
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(errText || `HTTP ${res.status}`);
+      }
+      const result = await res.json();
+      importHarBtn.textContent = `✅ ${result.imported || 0}`;
+      await fetchSpec();
+      setTimeout(() => {
+        importHarBtn.textContent = original;
+        importHarBtn.disabled = false;
+      }, 2500);
+    } catch (err) {
+      console.error(err);
+      importHarBtn.textContent = '❌ Error';
+      alert('HAR import failed: ' + (err.message || err));
+      setTimeout(() => {
+        importHarBtn.textContent = original;
+        importHarBtn.disabled = false;
+      }, 2500);
+    }
+  });
+}
+
 // Discovered Domains
 const viewDomainsBtn = document.getElementById('view-domains-btn');
 const discoveredModal = document.getElementById('discovered-domains-modal');
@@ -597,20 +639,52 @@ function renderDetails(path, method) {
 
   if (tabSchema) tabSchema.textContent = 'JSON Schema';
   if (tabRaw) tabRaw.textContent = 'Last Raw Payload';
+
+  const isGQL = operation['x-graphql'] === true;
+  let gqlBlock = '';
+  if (isGQL && operation['x-graphql-operations']) {
+    const names = Object.keys(operation['x-graphql-operations']);
+    gqlBlock = `<div style="margin-bottom: 1rem; padding: 0.75rem; border: 1px solid rgba(244, 114, 182, 0.35); border-radius: 8px;">
+      <div style="color: #f472b6; font-weight: 600; margin-bottom: 0.5rem;">GraphQL operations (${names.length})</div>
+      <div style="font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-muted);">${names.map((n) => escapeHtml(n)).join(', ')}</div>
+    </div>`;
+  }
   
-  const response = operation.responses && operation.responses['200'];
+  const statusKeys = operation.responses ? Object.keys(operation.responses).sort() : [];
+  const preferredStatus = statusKeys.includes('200') ? '200' : statusKeys[0];
+  const response = preferredStatus && operation.responses[preferredStatus];
   if (response && response.content && response.content['application/json']) {
     const schema = response.content['application/json'].schema;
-    elResponse.innerHTML = syntaxHighlight(schema);
+    elResponse.innerHTML = gqlBlock + (statusKeys.length > 1
+      ? `<div style="color: #38bdf8; font-size: 0.8rem; margin-bottom: 0.5rem;">Statuses: ${statusKeys.map(escapeHtml).join(', ')} (showing ${escapeHtml(preferredStatus)})</div>`
+      : '') + syntaxHighlight(schema);
+  } else if (gqlBlock) {
+    elResponse.innerHTML = gqlBlock + '<span style="color: #64748b;">// No JSON response schema yet.</span>';
   } else {
     elResponse.innerHTML = '<span style="color: #64748b;">// No JSON response payload intercepted yet.</span>';
   }
 
   if (operation['x-last-payload']) {
-    elRaw.innerHTML = syntaxHighlight(operation['x-last-payload']);
+    let raw = syntaxHighlight(operation['x-last-payload']);
+    if (operation['x-last-request-body']) {
+      raw = `<div style="color: #38bdf8; font-size: 0.8rem; margin-bottom: 0.35rem;">Request body</div>${syntaxHighlight(operation['x-last-request-body'])}
+             <div style="color: #38bdf8; font-size: 0.8rem; margin: 1rem 0 0.35rem;">Response body</div>${raw}`;
+    }
+    if (isGQL && operation['x-graphql-operations']) {
+      raw += `<div style="color: #f472b6; font-size: 0.8rem; margin: 1rem 0 0.35rem;">GraphQL ops</div>${syntaxHighlight(operation['x-graphql-operations'])}`;
+    }
+    elRaw.innerHTML = raw;
   } else {
     elRaw.innerHTML = '<span style="color: #64748b;">// No raw payload captured.</span>';
   }
+}
+
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 // Export logic
@@ -698,9 +772,12 @@ if (copyPythonBtn) {
     let pythonScript = `import requests\nimport json\n\nurl = "${url}"\n\nheaders = ${JSON.stringify(headers, null, 4)}\n\n`;
 
     let payloadKwarg = "";
-    if (['POST', 'PUT', 'PATCH'].includes(selectedMethod) && operation['x-last-payload']) {
-      pythonScript += `payload = ${JSON.stringify(operation['x-last-payload'], null, 4)}\n\n`;
+    // Prefer captured request body — never use response x-last-payload as request body.
+    if (['POST', 'PUT', 'PATCH'].includes(selectedMethod) && operation['x-last-request-body']) {
+      pythonScript += `payload = ${JSON.stringify(operation['x-last-request-body'], null, 4)}\n\n`;
       payloadKwarg = ", json=payload";
+    } else if (['POST', 'PUT', 'PATCH'].includes(selectedMethod)) {
+      pythonScript += `# No request body captured for this operation yet\n\n`;
     }
 
     const vaultNote = Object.keys(vaultHeaders).length > 0

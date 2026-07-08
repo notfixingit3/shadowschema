@@ -13,7 +13,7 @@ import (
 	"testing"
 )
 
-func TestExportMapEndpointIncludesVault(t *testing.T) {
+func TestExportMapEndpointOmitsVaultSecretsByDefault(t *testing.T) {
 	sm := newTestSpecManager(t, "example.com")
 	sm.SaveVaultCredential("Authorization", "Bearer test-token")
 
@@ -35,9 +35,28 @@ func TestExportMapEndpointIncludesVault(t *testing.T) {
 		t.Fatalf("failed to decode export: %v", err)
 	}
 
-	vault, ok := exported["x-shadowschema-vault"].([]interface{})
+	if _, ok := exported["x-shadowschema-vault"]; ok {
+		t.Fatalf("default export-map must not embed vault secrets")
+	}
+	components, _ := exported["components"].(map[string]interface{})
+	schemes, _ := components["securitySchemes"].(map[string]interface{})
+	if len(schemes) == 0 {
+		t.Fatalf("expected security schemes without secrets")
+	}
+
+	// Opt-in secrets
+	resp2, err := http.Get(server.URL + "/export-map?include_secrets=1")
+	if err != nil {
+		t.Fatalf("include_secrets request failed: %v", err)
+	}
+	defer resp2.Body.Close()
+	var withSecrets map[string]interface{}
+	if err := json.NewDecoder(resp2.Body).Decode(&withSecrets); err != nil {
+		t.Fatalf("decode failed: %v", err)
+	}
+	vault, ok := withSecrets["x-shadowschema-vault"].([]interface{})
 	if !ok || len(vault) == 0 {
-		t.Fatalf("expected vault data in export-map response, got %#v", exported["x-shadowschema-vault"])
+		t.Fatalf("expected vault data when include_secrets=1, got %#v", withSecrets["x-shadowschema-vault"])
 	}
 }
 
@@ -400,6 +419,7 @@ func TestExportEndpointsHandleOPTIONS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create request: %v", err)
 	}
+	req.Header.Set("Origin", "http://localhost:8080")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
@@ -409,8 +429,35 @@ func TestExportEndpointsHandleOPTIONS(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
 	}
-	if resp.Header.Get("Access-Control-Allow-Origin") != "*" {
-		t.Fatalf("expected CORS allow-origin header")
+	if resp.Header.Get("Access-Control-Allow-Origin") != "http://localhost:8080" {
+		t.Fatalf("expected CORS allow-origin for localhost dashboard, got %q", resp.Header.Get("Access-Control-Allow-Origin"))
+	}
+}
+
+func TestExportAPITokenAuth(t *testing.T) {
+	t.Setenv("SHADOWSCHEMA_EXPORT_TOKEN", "test-secret-token")
+	sm := newTestSpecManager(t, "example.com")
+	server := httptest.NewServer(sm.ExportHandler())
+	defer server.Close()
+
+	resp, err := http.Get(server.URL + "/vault")
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401 without token, got %d", resp.StatusCode)
+	}
+
+	req, _ := http.NewRequest(http.MethodGet, server.URL+"/vault", nil)
+	req.Header.Set("X-ShadowSchema-Token", "test-secret-token")
+	resp2, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("authed request failed: %v", err)
+	}
+	_ = resp2.Body.Close()
+	if resp2.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 with token, got %d", resp2.StatusCode)
 	}
 }
 
@@ -421,7 +468,7 @@ func TestGenerateSDKEndpointReturnsZip(t *testing.T) {
 
 	sm := newTestSpecManager(t, "example.com")
 	req, _ := http.NewRequest(http.MethodGet, "http://example.com/api/users", nil)
-	sm.AddEndpoint(req, "/api/users", []byte(`{"id":1,"name":"Alice"}`))
+	sm.AddEndpoint(req, "/api/users", 200, []byte(`{"id":1,"name":"Alice"}`), nil)
 
 	server := httptest.NewServer(sm.ExportHandler())
 	defer server.Close()

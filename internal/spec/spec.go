@@ -9,6 +9,7 @@ import (
 	"os"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"shadowschema/internal/parser"
+	"shadowschema/internal/router"
 )
 
 type SpecManager struct {
@@ -80,16 +82,35 @@ func (s *SpecManager) LoadLatestOrCreate(target string) {
 	}
 
 	// Create new
-	s.doc = &openapi3.T{
-		OpenAPI: "3.0.0",
-		Info: &openapi3.Info{Title: "ShadowSchema Auto-Generated API", Version: "1.0.0"},
-		Paths: openapi3.NewPaths(),
-	}
+	s.doc = newEmptySpec(target)
 	s.TargetDomain = target
 	s.IgnoreRules = "\\.(png|jpg|jpeg|webp|gif|css|js|woff|woff2|ico)$"
 	data, _ := json.Marshal(s.doc)
 	if newID, err := s.insertSession("Initial Run", target, s.IgnoreRules, string(data)); err == nil {
 		s.SessionID = newID
+	}
+}
+
+func newEmptySpec(target string) *openapi3.T {
+	doc := &openapi3.T{
+		OpenAPI: "3.0.0",
+		Info:    &openapi3.Info{Title: "ShadowSchema Auto-Generated API", Version: "1.0.0"},
+		Paths:   openapi3.NewPaths(),
+	}
+	ensureServers(doc, target)
+	return doc
+}
+
+func ensureServers(doc *openapi3.T, target string) {
+	if doc == nil {
+		return
+	}
+	url := serverURLForTarget(target)
+	if len(doc.Servers) == 1 && doc.Servers[0] != nil && doc.Servers[0].URL == url {
+		return
+	}
+	doc.Servers = openapi3.Servers{
+		&openapi3.Server{URL: url, Description: "Primary target inferred by ShadowSchema"},
 	}
 }
 
@@ -108,11 +129,10 @@ func (s *SpecManager) SaveVaultCredential(headerName, tokenValue string) {
 func (s *SpecManager) IsTarget(host string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	targets := strings.Split(s.TargetDomain, ",")
 	for _, t := range targets {
-		t = strings.TrimSpace(t)
-		if t != "" && strings.Contains(host, t) {
+		if hostMatchesTarget(host, t) {
 			return true
 		}
 	}
@@ -245,7 +265,11 @@ func (s *SpecManager) AddWebSocket(req *http.Request, path string) {
 	s.scheduleSave()
 }
 
-func (s *SpecManager) AddEndpoint(req *http.Request, path string, body []byte) {
+// AddEndpoint records an observed HTTP exchange.
+// statusCode is the real response status (stored under that key in OpenAPI).
+// responseBody may be empty (e.g. 204 No Content).
+// requestBody is optional and drives requestBody schema + replay scripts.
+func (s *SpecManager) AddEndpoint(req *http.Request, path string, statusCode int, responseBody, requestBody []byte) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -255,7 +279,9 @@ func (s *SpecManager) AddEndpoint(req *http.Request, path string, body []byte) {
 		}
 	}
 
-	newSchema := parser.ParseResponseBody(body)
+	if statusCode <= 0 {
+		statusCode = http.StatusOK
+	}
 
 	pathItem := s.doc.Paths.Find(path)
 	if pathItem == nil {
@@ -298,24 +324,25 @@ func (s *SpecManager) AddEndpoint(req *http.Request, path string, body []byte) {
 		operation.Responses = openapi3.NewResponses()
 	}
 
-	// Capture last seen payload (convert to valid JSON object/string or base64)
 	if operation.Extensions == nil {
 		operation.Extensions = make(map[string]interface{})
 	}
-	
-	operation.Extensions["x-last-seen"] = time.Now().UTC().Format(time.RFC3339)
 
-	if len(body) > 0 {
-		var raw map[string]interface{}
-		var rawArr []interface{}
-		if err := json.Unmarshal(body, &raw); err == nil {
-			operation.Extensions["x-last-payload"] = raw
-		} else if err := json.Unmarshal(body, &rawArr); err == nil {
-			operation.Extensions["x-last-payload"] = rawArr
-		} else {
-			operation.Extensions["x-last-payload"] = string(body)
-		}
+	operation.Extensions["x-last-seen"] = time.Now().UTC().Format(time.RFC3339)
+	operation.Extensions["x-last-status"] = statusCode
+
+	if len(responseBody) > 0 {
+		operation.Extensions["x-last-payload"] = decodeJSONPayload(responseBody)
 	}
+
+	if len(requestBody) > 0 {
+		operation.Extensions["x-last-request-body"] = decodeJSONPayload(requestBody)
+		mergeRequestBodySchema(operation, requestBody)
+	}
+
+	mergeGraphQLMetadata(operation, path, requestBody, responseBody)
+
+	ensurePathParameters(operation, path)
 
 	for key := range req.URL.Query() {
 		exists := false
@@ -338,6 +365,8 @@ func (s *SpecManager) AddEndpoint(req *http.Request, path string, body []byte) {
 		"Sec-Fetch-Dest": true, "Referer": true, "Origin": true, "Content-Length": true,
 		"Content-Type": true, "X-Forwarded-For": true, "X-Forwarded-Proto": true,
 		"Sec-Ch-Ua": true, "Sec-Ch-Ua-Mobile": true, "Sec-Ch-Ua-Platform": true,
+		// Cookie is captured in the Auth Vault, not as a free-form header parameter.
+		"Cookie": true,
 	}
 	for key := range req.Header {
 		canonical := http.CanonicalHeaderKey(key)
@@ -357,28 +386,100 @@ func (s *SpecManager) AddEndpoint(req *http.Request, path string, body []byte) {
 		}
 	}
 
-	resp := operation.Responses.Value("200")
+	statusKey := strconv.Itoa(statusCode)
+	newSchema := parser.ParseResponseBody(responseBody)
+	resp := operation.Responses.Value(statusKey)
 	if resp == nil {
-		mediaType := openapi3.NewMediaType()
-		mediaType.Schema = newSchema
-		content := openapi3.NewContentWithJSONSchema(newSchema.Value)
-		respValue := openapi3.NewResponse().WithDescription("Auto-generated response").WithContent(content)
-		operation.Responses.Set("200", &openapi3.ResponseRef{Value: respValue})
-	} else {
+		respValue := openapi3.NewResponse().WithDescription(fmt.Sprintf("Observed HTTP %d", statusCode))
+		if newSchema != nil && newSchema.Value != nil {
+			content := openapi3.NewContentWithJSONSchema(newSchema.Value)
+			respValue = respValue.WithContent(content)
+		}
+		operation.Responses.Set(statusKey, &openapi3.ResponseRef{Value: respValue})
+	} else if newSchema != nil && newSchema.Value != nil {
+		if resp.Value.Content == nil {
+			resp.Value.Content = openapi3.NewContent()
+		}
 		content := resp.Value.Content.Get("application/json")
 		if content != nil && content.Schema != nil {
 			content.Schema = parser.MergeSchema(content.Schema, newSchema)
 		} else {
-			if resp.Value.Content == nil {
-				resp.Value.Content = openapi3.NewContent()
-			}
 			mediaType := openapi3.NewMediaType()
 			mediaType.Schema = newSchema
 			resp.Value.Content["application/json"] = mediaType
 		}
 	}
 
+	ensureServers(s.doc, s.TargetDomain)
 	s.scheduleSave()
+}
+
+func decodeJSONPayload(body []byte) interface{} {
+	var raw map[string]interface{}
+	var rawArr []interface{}
+	if err := json.Unmarshal(body, &raw); err == nil {
+		return raw
+	}
+	if err := json.Unmarshal(body, &rawArr); err == nil {
+		return rawArr
+	}
+	return string(body)
+}
+
+func mergeRequestBodySchema(operation *openapi3.Operation, requestBody []byte) {
+	newSchema := parser.ParseRequestBody(requestBody)
+	if newSchema == nil || newSchema.Value == nil {
+		return
+	}
+	if operation.RequestBody == nil {
+		mediaType := openapi3.NewMediaType()
+		mediaType.Schema = newSchema
+		rb := openapi3.NewRequestBody().WithDescription("Inferred from observed request body").WithContent(
+			openapi3.NewContentWithJSONSchema(newSchema.Value),
+		)
+		operation.RequestBody = &openapi3.RequestBodyRef{Value: rb}
+		return
+	}
+	if operation.RequestBody.Value == nil {
+		return
+	}
+	if operation.RequestBody.Value.Content == nil {
+		operation.RequestBody.Value.Content = openapi3.NewContent()
+	}
+	content := operation.RequestBody.Value.Content.Get("application/json")
+	if content != nil && content.Schema != nil {
+		content.Schema = parser.MergeSchema(content.Schema, newSchema)
+	} else {
+		mediaType := openapi3.NewMediaType()
+		mediaType.Schema = newSchema
+		operation.RequestBody.Value.Content["application/json"] = mediaType
+	}
+}
+
+func ensurePathParameters(operation *openapi3.Operation, path string) {
+	for _, pp := range router.PathParamsFromTemplate(path) {
+		exists := false
+		for _, p := range operation.Parameters {
+			if p.Value != nil && p.Value.Name == pp.Name && p.Value.In == "path" {
+				exists = true
+				break
+			}
+		}
+		if exists {
+			continue
+		}
+		param := openapi3.NewPathParameter(pp.Name)
+		param.Required = true
+		schema := openapi3.NewStringSchema()
+		if pp.Schema == "integer" {
+			schema = openapi3.NewIntegerSchema()
+		}
+		if pp.Format != "" {
+			schema.Format = pp.Format
+		}
+		param.Schema = openapi3.NewSchemaRef("", schema)
+		operation.AddParameter(param)
+	}
 }
 
 func (s *SpecManager) ExportJSON(filename string) error {
@@ -393,35 +494,56 @@ func (s *SpecManager) ExportJSON(filename string) error {
 	return os.WriteFile(filename, data, 0600)
 }
 
-func enableCORS(w http.ResponseWriter) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-}
-
 func (s *SpecManager) ExportHandler() http.Handler {
 	mux := http.NewServeMux()
 	s.mountExportRoutes(mux)
-	return mux
+	return withExportAuth(mux)
 }
 
-func (s *SpecManager) StartExportServer(port string) {
-	fmt.Printf("[INFO] Export server running on %s\n", port)
+func (s *SpecManager) StartExportServer(addr string) {
+	if addr == "" {
+		addr = exportListenAddr()
+	}
+	fmt.Printf("[INFO] Export server running on %s\n", addr)
+	if token := exportAPIToken(); token != "" {
+		fmt.Println("[INFO] Export API token auth enabled (SHADOWSCHEMA_EXPORT_TOKEN)")
+	}
 	srv := &http.Server{
-		Addr:              port,
+		Addr:              addr,
 		Handler:           s.ExportHandler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	_ = srv.ListenAndServe()
 }
 
+// exportListenAddr returns the bind address for the export API.
+// SHADOWSCHEMA_EXPORT_ADDR overrides fully (e.g. "127.0.0.1:38081" or ":38081").
+// Default is ":38081" so Docker/internal networking works; compose should publish
+// host ports as 127.0.0.1:38081 only.
+func exportListenAddr() string {
+	if addr := strings.TrimSpace(os.Getenv("SHADOWSCHEMA_EXPORT_ADDR")); addr != "" {
+		return addr
+	}
+	return ":38081"
+}
+
+func parseIncludeSecrets(raw string) bool {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
+}
+
 func (s *SpecManager) mountExportRoutes(mux *http.ServeMux) {
 	s.mountCACertRoute(mux)
 	s.mountHealthAndEndpointRoutes(mux)
 	s.mountReplayRoute(mux)
+	s.mountHARImportRoute(mux)
 
 	mux.HandleFunc("/export-map", func(w http.ResponseWriter, r *http.Request) {
-		enableCORS(w)
+		enableCORS(w, r)
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)
 			return
@@ -439,9 +561,10 @@ func (s *SpecManager) mountExportRoutes(mux *http.ServeMux) {
 			return
 		}
 
+		includeSecrets := parseIncludeSecrets(r.URL.Query().Get("include_secrets"))
 		doc := filterDocByPathPrefix(view.Doc, r.URL.Query().Get("path_prefix"))
 		s.mu.Lock()
-		data, err := s.buildExportDocumentFrom(doc, view.SessionID)
+		data, err := s.buildExportDocumentFrom(doc, view.SessionID, includeSecrets)
 		s.mu.Unlock()
 
 		if err != nil {
@@ -468,7 +591,7 @@ func (s *SpecManager) mountExportRoutes(mux *http.ServeMux) {
 	})
 
 	mux.HandleFunc("/sessions", func(w http.ResponseWriter, r *http.Request) {
-		enableCORS(w)
+		enableCORS(w, r)
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)
 			return
@@ -489,7 +612,7 @@ func (s *SpecManager) mountExportRoutes(mux *http.ServeMux) {
 					sessions = append(sessions, sm)
 				}
 			}
-			
+
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(sessions)
 			return
@@ -505,38 +628,52 @@ func (s *SpecManager) mountExportRoutes(mux *http.ServeMux) {
 				http.Error(w, "Bad Request", http.StatusBadRequest)
 				return
 			}
-			
+
 			if reqData.Name == "" || reqData.Target == "" {
 				http.Error(w, "Name and Target required", http.StatusBadRequest)
 				return
 			}
 
 			s.mu.Lock()
-			s.doc = &openapi3.T{
-				OpenAPI: "3.0.0",
-				Info: &openapi3.Info{Title: "ShadowSchema Auto-Generated API", Version: "1.0.0"},
-				Paths: openapi3.NewPaths(),
-			}
+			s.doc = newEmptySpec(reqData.Target)
 			s.TargetDomain = reqData.Target
 			s.IgnoreRules = reqData.Ignore
 			data, _ := json.Marshal(s.doc)
-			newID, _ := s.insertSession(reqData.Name, reqData.Target, reqData.Ignore, string(data))
+			newID, err := s.insertSession(reqData.Name, reqData.Target, reqData.Ignore, string(data))
+			if err != nil {
+				s.mu.Unlock()
+				http.Error(w, "Failed to create session: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			if newID <= 0 {
+				s.mu.Unlock()
+				http.Error(w, "Failed to create session: invalid id", http.StatusInternalServerError)
+				return
+			}
 			s.SessionID = newID
 			s.Discovered = make(map[string]bool)
 			s.mu.Unlock()
 
+			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"ok":   true,
+				"id":   newID,
+				"name": reqData.Name,
+				"target": reqData.Target,
+			})
 			return
 		}
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 	})
 
 	mux.HandleFunc("/discovered", func(w http.ResponseWriter, r *http.Request) {
-		enableCORS(w)
+		enableCORS(w, r)
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-		
+
 		s.mu.Lock()
 		keys := make([]string, 0, len(s.Discovered))
 		for k := range s.Discovered {
@@ -551,7 +688,7 @@ func (s *SpecManager) mountExportRoutes(mux *http.ServeMux) {
 	})
 
 	mux.HandleFunc("/vault", func(w http.ResponseWriter, r *http.Request) {
-		enableCORS(w)
+		enableCORS(w, r)
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)
 			return
@@ -579,10 +716,11 @@ func (s *SpecManager) mountExportRoutes(mux *http.ServeMux) {
 			_ = json.NewEncoder(w).Encode(credentials)
 			return
 		}
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 	})
 
 	mux.HandleFunc("/sessions/add-target", func(w http.ResponseWriter, r *http.Request) {
-		enableCORS(w)
+		enableCORS(w, r)
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)
 			return
@@ -595,20 +733,43 @@ func (s *SpecManager) mountExportRoutes(mux *http.ServeMux) {
 				http.Error(w, "Bad Request", http.StatusBadRequest)
 				return
 			}
+			domain := strings.TrimSpace(reqData.Domain)
+			if domain == "" {
+				http.Error(w, "domain required", http.StatusBadRequest)
+				return
+			}
 
 			s.mu.Lock()
-			// Append to target
-			if !strings.Contains(s.TargetDomain, reqData.Domain) {
-				s.TargetDomain = s.TargetDomain + "," + reqData.Domain
-				_, _ = s.dbExec(`UPDATE sessions SET target = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, s.TargetDomain, s.SessionID)
+			// Exact host membership (avoid substring false positives like api.com in evil-api.com)
+			already := false
+			for _, t := range strings.Split(s.TargetDomain, ",") {
+				if normalizeHost(t) == normalizeHost(domain) {
+					already = true
+					break
+				}
+			}
+			if !already {
+				if s.TargetDomain == "" {
+					s.TargetDomain = domain
+				} else {
+					s.TargetDomain = s.TargetDomain + "," + domain
+				}
+				if _, err := s.dbExec(`UPDATE sessions SET target = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, s.TargetDomain, s.SessionID); err != nil {
+					s.mu.Unlock()
+					http.Error(w, "Failed to update target: "+err.Error(), http.StatusInternalServerError)
+					return
+				}
+				ensureServers(s.doc, s.TargetDomain)
 			}
 			s.mu.Unlock()
 			w.WriteHeader(http.StatusOK)
+			return
 		}
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 	})
 
 	mux.HandleFunc("/sessions/switch", func(w http.ResponseWriter, r *http.Request) {
-		enableCORS(w)
+		enableCORS(w, r)
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)
 			return
@@ -622,29 +783,44 @@ func (s *SpecManager) mountExportRoutes(mux *http.ServeMux) {
 				http.Error(w, "Bad Request", http.StatusBadRequest)
 				return
 			}
+			if reqData.ID <= 0 {
+				http.Error(w, "valid id required", http.StatusBadRequest)
+				return
+			}
 
 			s.mu.Lock()
 			var specJSON string
 			var t string
 			var ignore string
 			err := s.dbQueryRow(`SELECT target, ignore_rules, spec_json FROM sessions WHERE id = ?`, reqData.ID).Scan(&t, &ignore, &specJSON)
-			if err == nil {
-				if doc, ok := s.loadAndMigrateSpec(reqData.ID, specJSON); ok {
-					s.doc = doc
-					s.SessionID = reqData.ID
-					s.TargetDomain = t
-					s.IgnoreRules = ignore
-					s.Discovered = s.loadDiscoveredDomainsLocked(reqData.ID)
-					_, _ = s.dbExec(`UPDATE sessions SET updated_at = CURRENT_TIMESTAMP WHERE id = ?`, reqData.ID)
-				}
+			if err != nil {
+				s.mu.Unlock()
+				http.Error(w, "Session not found", http.StatusNotFound)
+				return
 			}
+			doc, ok := s.loadAndMigrateSpec(reqData.ID, specJSON)
+			if !ok {
+				s.mu.Unlock()
+				http.Error(w, "Failed to load session spec", http.StatusInternalServerError)
+				return
+			}
+			s.doc = doc
+			s.SessionID = reqData.ID
+			s.TargetDomain = t
+			s.IgnoreRules = ignore
+			s.Discovered = s.loadDiscoveredDomainsLocked(reqData.ID)
+			ensureServers(s.doc, s.TargetDomain)
+			_, _ = s.dbExec(`UPDATE sessions SET updated_at = CURRENT_TIMESTAMP WHERE id = ?`, reqData.ID)
 			s.mu.Unlock()
-			w.WriteHeader(http.StatusOK)
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "id": reqData.ID})
+			return
 		}
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 	})
 
 	mux.HandleFunc("/sessions/rename", func(w http.ResponseWriter, r *http.Request) {
-		enableCORS(w)
+		enableCORS(w, r)
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)
 			return
@@ -679,11 +855,13 @@ func (s *SpecManager) mountExportRoutes(mux *http.ServeMux) {
 				return
 			}
 			w.WriteHeader(http.StatusOK)
+			return
 		}
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 	})
 
 	mux.HandleFunc("/sessions/delete", func(w http.ResponseWriter, r *http.Request) {
-		enableCORS(w)
+		enableCORS(w, r)
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)
 			return
@@ -697,10 +875,24 @@ func (s *SpecManager) mountExportRoutes(mux *http.ServeMux) {
 				http.Error(w, "Bad Request", http.StatusBadRequest)
 				return
 			}
+			if reqData.ID <= 0 {
+				http.Error(w, "valid id required", http.StatusBadRequest)
+				return
+			}
 
 			s.mu.Lock()
-			_, _ = s.dbExec(`DELETE FROM sessions WHERE id = ?`, reqData.ID)
-			
+			result, err := s.dbExec(`DELETE FROM sessions WHERE id = ?`, reqData.ID)
+			if err != nil {
+				s.mu.Unlock()
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			if rows, _ := result.RowsAffected(); rows == 0 {
+				s.mu.Unlock()
+				http.Error(w, "Session not found", http.StatusNotFound)
+				return
+			}
+
 			// If we just deleted the active session, load whatever is left or create a fallback
 			if s.SessionID == reqData.ID {
 				var specJSON string
@@ -715,29 +907,33 @@ func (s *SpecManager) mountExportRoutes(mux *http.ServeMux) {
 						s.TargetDomain = target
 						s.IgnoreRules = ignore
 						s.Discovered = s.loadDiscoveredDomainsLocked(id)
+						ensureServers(s.doc, s.TargetDomain)
 					}
 				} else {
 					// DB empty, fallback
-					s.doc = &openapi3.T{
-						OpenAPI: "3.0.0",
-						Info: &openapi3.Info{Title: "ShadowSchema Auto-Generated API", Version: "1.0.0"},
-						Paths: openapi3.NewPaths(),
-					}
+					s.doc = newEmptySpec("example.com")
 					s.TargetDomain = "example.com"
 					s.IgnoreRules = ""
 					data, _ := json.Marshal(s.doc)
-					newID, _ := s.insertSession("Fallback", "example.com", "", string(data))
+					newID, insertErr := s.insertSession("Fallback", "example.com", "", string(data))
+					if insertErr != nil {
+						s.mu.Unlock()
+						http.Error(w, "Failed to create fallback session: "+insertErr.Error(), http.StatusInternalServerError)
+						return
+					}
 					s.SessionID = newID
 					s.Discovered = make(map[string]bool)
 				}
 			}
 			s.mu.Unlock()
 			w.WriteHeader(http.StatusOK)
+			return
 		}
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 	})
 
 	mux.HandleFunc("/generate-sdk", func(w http.ResponseWriter, r *http.Request) {
-		enableCORS(w)
+		enableCORS(w, r)
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)
 			return

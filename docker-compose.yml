@@ -39,9 +39,10 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER:-shadowschema}:${POSTGRES_PASSWORD:-shadowschema}@postgres:5432/${POSTGRES_DB:-shadowschema}?sslmode=disable
     volumes:
       - shadowschema-certs:/app/certs
+    # Bind export + MITM to localhost only — never publish vault/CA/export API publicly.
     ports:
-      - "38080:38080"
-      - "38081:38081"
+      - "127.0.0.1:38080:38080"
+      - "127.0.0.1:38081:38081"
     depends_on:
       postgres:
         condition: service_healthy
