@@ -66,3 +66,44 @@ func TestVaultScopedByHost(t *testing.T) {
 		t.Fatalf("expected host-filtered vault response, got %#v", listed)
 	}
 }
+
+// Parent-domain session targets (example.com) must still resolve vault tokens
+// captured on API subdomains (api.example.com) — the common recon pattern.
+func TestVaultFilterIncludesSubdomainCredentials(t *testing.T) {
+	sm := newTestSpecManager(t, "example.com")
+	sm.SaveVaultCredential("Authorization", "Bearer api-sub-token", "api.example.com")
+	sm.SaveVaultCredential("X-Api-Key", "parent-global", "")
+
+	creds, err := sm.listVaultCredentialsForSession(sm.SessionID, "example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	auth, key := "", ""
+	for _, c := range creds {
+		switch c.HeaderName {
+		case "Authorization":
+			auth = c.TokenValue
+		case "X-Api-Key":
+			key = c.TokenValue
+		}
+	}
+	if auth != "Bearer api-sub-token" {
+		t.Fatalf("expected subdomain token under parent filter, got %q among %#v", auth, creds)
+	}
+	if key != "parent-global" {
+		t.Fatalf("expected global key under parent filter, got %q", key)
+	}
+
+	// More-specific filter still wins over sibling host.
+	sm.SaveVaultCredential("Authorization", "Bearer exact", "example.com")
+	exact, err := sm.listVaultCredentialsForSession(sm.SessionID, "example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range exact {
+		if c.HeaderName == "Authorization" && c.TokenValue != "Bearer exact" {
+			t.Fatalf("exact host filter should prefer exact host credential, got %q", c.TokenValue)
+		}
+	}
+}

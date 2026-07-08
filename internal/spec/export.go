@@ -34,8 +34,9 @@ func (s *SpecManager) listVaultCredentials() ([]AuthCredential, error) {
 }
 
 // listVaultCredentialsForSession returns vault entries for a session.
-// When hostFilter is non-empty, returns credentials for that host plus session-global
-// (empty host) entries, preferring host-specific values when both exist for a header.
+// When hostFilter is non-empty, returns credentials whose host matches the filter
+// via hostMatchesTarget (so target example.com includes api.example.com) plus
+// session-global (empty host) entries. More-specific hosts win over parents.
 func (s *SpecManager) listVaultCredentialsForSession(sessionID int, hostFilter string) ([]AuthCredential, error) {
 	hostFilter = normalizeHost(hostFilter)
 
@@ -73,28 +74,40 @@ func (s *SpecManager) listVaultCredentialsForSession(sessionID int, hostFilter s
 		return out, nil
 	}
 
-	// Prefer host-specific, fall back to empty-host globals for missing headers.
-	byHeaderHost := make(map[string]AuthCredential)
-	byHeaderGlobal := make(map[string]AuthCredential)
+	// Rank matching credentials: exact host > longer subdomain match > empty global.
+	type ranked struct {
+		ac    AuthCredential
+		score int
+	}
+	best := make(map[string]ranked) // header_name → best credential
+
+	consider := func(ac AuthCredential, score int) {
+		prev, ok := best[ac.HeaderName]
+		if !ok || score > prev.score {
+			best[ac.HeaderName] = ranked{ac: ac, score: score}
+		}
+	}
+
 	for _, ac := range all {
-		if ac.Host == hostFilter {
-			if _, ok := byHeaderHost[ac.HeaderName]; !ok {
-				byHeaderHost[ac.HeaderName] = ac
-			}
-		} else if ac.Host == "" {
-			if _, ok := byHeaderGlobal[ac.HeaderName]; !ok {
-				byHeaderGlobal[ac.HeaderName] = ac
-			}
+		switch {
+		case ac.Host == "":
+			consider(ac, 1) // session-global fallback
+		case ac.Host == hostFilter:
+			consider(ac, 1000+len(ac.Host)) // exact match on filter
+		case hostMatchesTarget(ac.Host, hostFilter):
+			// Credential host is under filter (api.example.com under example.com)
+			// or filter is under credential host — prefer longer (more specific) host.
+			consider(ac, 100+len(ac.Host))
+		case hostMatchesTarget(hostFilter, ac.Host):
+			// Filter is more specific than credential host (filter api.x, cred x) —
+			// credential may still apply as parent-scope token.
+			consider(ac, 50+len(ac.Host))
 		}
 	}
-	out := make([]AuthCredential, 0, len(byHeaderHost)+len(byHeaderGlobal))
-	for _, ac := range byHeaderHost {
-		out = append(out, ac)
-	}
-	for name, ac := range byHeaderGlobal {
-		if _, ok := byHeaderHost[name]; !ok {
-			out = append(out, ac)
-		}
+
+	out := make([]AuthCredential, 0, len(best))
+	for _, r := range best {
+		out = append(out, r.ac)
 	}
 	return out, nil
 }

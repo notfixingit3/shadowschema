@@ -123,10 +123,11 @@ func (s *SpecManager) GetTarget() string {
 
 // SaveVaultCredential stores a captured auth header for the active session,
 // scoped to the request host (empty host = session-global / legacy).
+// Header names are canonicalized so live and HAR capture use the same keys.
 func (s *SpecManager) SaveVaultCredential(headerName, tokenValue, host string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	_ = s.saveVaultCredential(headerName, tokenValue, normalizeHost(host))
+	_ = s.saveVaultCredential(http.CanonicalHeaderKey(headerName), tokenValue, normalizeHost(host))
 }
 
 func (s *SpecManager) IsTarget(host string) bool {
