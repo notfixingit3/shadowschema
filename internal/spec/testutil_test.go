@@ -14,5 +14,13 @@ func setupIsolatedDB(t *testing.T) {
 func newTestSpecManager(t *testing.T, target string) *SpecManager {
 	t.Helper()
 	setupIsolatedDB(t)
-	return NewSpecManager(target)
+	sm := NewSpecManager(target)
+	t.Cleanup(func() {
+		// Flush + close so TempDir cleanup does not fail on open SQLite handles.
+		sm.Flush()
+		if sm.db != nil {
+			_ = sm.db.Close()
+		}
+	})
+	return sm
 }

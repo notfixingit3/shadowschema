@@ -124,7 +124,7 @@ func TestProxyCapturesVaultCredential(t *testing.T) {
 	exportServer := httptest.NewServer(sm.ExportHandler())
 	defer exportServer.Close()
 
-	vaultResp, err := http.Get(exportServer.URL + "/vault")
+	vaultResp, err := http.Get(exportServer.URL + "/vault?include_values=1")
 	if err != nil {
 		t.Fatalf("vault request failed: %v", err)
 	}

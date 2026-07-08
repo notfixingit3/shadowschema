@@ -4,7 +4,7 @@ Model Context Protocol server that exposes ShadowSchema's live API recon to codi
 
 ## Status
 
-Phase 4 — 18 tools + 2 resources: HAR import, GraphQL operation indexing (via export API), Playwright explore 2.0, and Python replay export.
+Phase 4 — 20 tools + 2 resources: HAR import, GraphQL ops, explore 2.0, vault redaction modes, session diff, OpenAPI validate, and Python replay export.
 
 ## Quick start
 
@@ -62,7 +62,9 @@ Run `npm run build` in `mcp/` first. Do not use `npm start` as the MCP command �
 | `shadowschema_get_spec` | Full OpenAPI JSON/YAML (optional path filter) |
 | `shadowschema_list_endpoints` | Compact endpoint index |
 | `shadowschema_get_endpoint` | Single path detail with schemas and payloads |
-| `shadowschema_get_vault` | Captured auth credentials |
+| `shadowschema_get_vault` | Captured auth credentials (`include_values` default false / redacted) |
+| `shadowschema_session_diff` | Compare two sessions (added/removed/changed paths) |
+| `shadowschema_validate_spec` | Validate inferred OpenAPI (structural + path-param checks) |
 | `shadowschema_list_discovered_domains` | Out-of-scope CONNECT hosts |
 | `shadowschema_add_target_domain` | Expand target perimeter |
 | `shadowschema_generate_sdk` | SDK zip (base64 or file path) |

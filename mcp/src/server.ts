@@ -12,7 +12,12 @@ import { getEndpointDetail, listEndpointSummaries } from "./utils/filter.js";
 import { waitForEndpoints } from "./utils/poll.js";
 import { isTcpPortOpen, parseProxyUrl } from "./utils/proxy-check.js";
 import { SpecSnapshotStore } from "./utils/snapshot.js";
-import { INFERRED_SCHEMA_NOTE, LEGAL_NOTE, VAULT_SECURITY_NOTE } from "./utils/security.js";
+import {
+  INFERRED_SCHEMA_NOTE,
+  LEGAL_NOTE,
+  VAULT_SECURITY_NOTE,
+  redactVaultCredentials,
+} from "./utils/security.js";
 
 function textResult(text: string) {
   return { content: [{ type: "text" as const, text }] };
@@ -35,7 +40,7 @@ export function createServer(
 ): McpServer {
   const server = new McpServer({
     name: "shadowschema-mcp",
-    version: "0.4.0",
+    version: "0.4.1",
   });
 
   server.registerTool(
@@ -208,17 +213,61 @@ export function createServer(
   server.registerTool(
     "shadowschema_get_vault",
     {
-      description: `Get captured auth credentials from the active session. ${VAULT_SECURITY_NOTE}`,
-      inputSchema: z.object({}),
+      description: `Get captured auth credentials from the active session. Token values are redacted by default — set include_values=true only when needed for local replay. ${VAULT_SECURITY_NOTE}`,
+      inputSchema: z.object({
+        include_values: z
+          .boolean()
+          .optional()
+          .default(false)
+          .describe("When true, return live token values (SENSITIVE). Default redacts values."),
+      }),
     },
-    async () => {
+    async ({ include_values }) => {
       try {
-        const credentials = await client.getVault();
+        const credentials = await client.getVault({ includeValues: include_values });
+        // Defense in depth: never pass secrets through unless explicitly requested.
+        const safe = include_values ? credentials : redactVaultCredentials(credentials);
         return jsonResult({
           warning: VAULT_SECURITY_NOTE,
-          count: credentials.length,
-          credentials,
+          include_values: Boolean(include_values),
+          count: safe.length,
+          credentials: safe,
         });
+      } catch (error) {
+        return toolError(String(error));
+      }
+    },
+  );
+
+  server.registerTool(
+    "shadowschema_session_diff",
+    {
+      description: `Compare two recon sessions (added/removed paths and method changes). ${INFERRED_SCHEMA_NOTE}`,
+      inputSchema: z.object({
+        from: z.number().int().positive().describe("Baseline session ID"),
+        to: z.number().int().positive().describe("Compare session ID"),
+      }),
+    },
+    async ({ from, to }) => {
+      try {
+        return jsonResult(await client.diffSessions(from, to));
+      } catch (error) {
+        return toolError(String(error));
+      }
+    },
+  );
+
+  server.registerTool(
+    "shadowschema_validate_spec",
+    {
+      description: `Validate the inferred OpenAPI document (structural + ShadowSchema checks). ${INFERRED_SCHEMA_NOTE}`,
+      inputSchema: z.object({
+        session_id: z.number().int().positive().optional(),
+      }),
+    },
+    async ({ session_id }) => {
+      try {
+        return jsonResult(await client.validateSpec(session_id));
       } catch (error) {
         return toolError(String(error));
       }
@@ -550,7 +599,7 @@ export function createServer(
         try {
           const [detail, vault, health] = await Promise.all([
             client.getEndpointFromApi(path, session_id),
-            client.getVault(),
+            client.getVault({ includeValues: true }),
             client.getHealth(session_id),
           ]);
 

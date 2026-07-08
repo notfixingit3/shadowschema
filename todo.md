@@ -507,3 +507,150 @@ Include a **combined workflow** snippet in `agent-setup.md`:
 - Route handlers: `internal/spec/spec.go` → `mountExportRoutes`
 - SDK generation: `internal/spec/export.go`, `internal/spec/sdk.go`
 - MCP SDK: https://github.com/modelcontextprotocol/typescript-sdk
+
+---
+
+# Post–v1.1.3-beta.9 Roadmap
+
+> Captured after shipping recon hardening (request bodies, secret-safe export, host matching, status codes, path params/servers, export auth/CORS, richer templates/schema merge, vault coverage) plus HAR import, GraphQL ops index, and Explore 2.0.
+>
+> Priority bands: **P1** = high value / correctness, **P2** = product leverage, **P3** = polish / scale.
+
+## Shipped (context — do not re-open without cause)
+
+- [x] Request body capture + replay uses request body only
+- [x] Default export omits vault secrets (`?include_secrets=1` / `/vault`)
+- [x] Exact/subdomain `IsTarget` (no substring)
+- [x] Path parameters + OpenAPI `servers`
+- [x] Real status codes + empty 2xx + error bodies
+- [x] Session create/switch/delete error handling
+- [x] Export bind docs + token auth + CORS allowlist + localhost compose ports
+- [x] Richer path templating + schema merge (nullable, oneOf, formats)
+- [x] Cookie / Set-Cookie / CSRF vault headers
+- [x] HAR import (`POST /import-har`, dashboard, MCP)
+- [x] GraphQL `x-graphql-operations` index
+- [x] Explore 2.0 (networkidle, seeds, clicks, allow_hosts)
+
+---
+
+## P1 — Correctness & security
+
+### Schema & capture quality
+
+- [x] **Multi-sample response history** — `x-payload-samples` (last 5), `x-hit-count`, `x-status-histogram`
+- [x] **Required query/header inference** — `required: true` after ≥3 consistent hits with zero misses
+- [x] **Query/header typing** — integer/bool/uuid formats for query params from observed values
+- [ ] **Content-Type aware bodies** — form-urlencoded, multipart field names, protobuf/binary hints (don’t force JSON string schema)
+- [ ] **Non-JSON media types** — record `text/*`, XML, protobuf as distinct content types in OpenAPI
+- [ ] **Path param collisions** — when two segments template to the same name (`/{id}/…/{id}`), generate unique names (`id`, `id2`) or semantic names from neighbors
+- [ ] **Ignore-rule UX** — validate ignore regex on session create; preset packs (static assets, analytics, well-known noise)
+
+### Auth & secrets
+
+- [x] **Vault redaction modes (MCP)** — `get_vault({ include_values: false })` default; REST `/vault` redacts unless `include_values=1`
+- [ ] **Scoped vault per host** — multi-target sessions currently mix credentials; key vault by host (+ path prefix optional)
+- [ ] **Cookie jar model** — parse Set-Cookie into named cookies; rebuild Cookie header for replay without dumping full jar into every export
+- [x] **Strip secrets from SDK zip** — `specForSDK` / `sanitizeDocForExport` strips vault + sample payloads
+- [ ] **Dashboard XSS hardening** — use `textContent` / `escapeHtml` for all path/param/summary fields injected into HTML
+
+### Export API & ops
+
+- [ ] **Multi-arch Docker images** — publish `linux/amd64` + `linux/arm64` (Apple Silicon friction)
+- [ ] **Compose profile `public-ports`** — keep localhost bind as default; opt-in `0.0.0.0` for lab devices
+- [ ] **Export API rate limits / body caps** — protect `/import-har` and `/generate-sdk` on shared hosts
+- [ ] **Health that doesn’t require token** — optional unauthenticated `/health` when `SHADOWSCHEMA_EXPORT_TOKEN` is set (for orchestrators)
+- [ ] **Postgres migration path** — document/tooling for SQLite → Postgres for users who started on local dev
+
+---
+
+## P2 — Product leverage (agent + recon)
+
+### Agent / MCP
+
+- [ ] **Publish npm package** — `@notfixingit3/shadowschema-mcp` (was deferred until manual testing complete)
+- [x] **`shadowschema_validate_spec`** — kin-openapi + path-param / servers checks (`GET /validate-spec`)
+- [x] **`shadowschema_session_diff`** — diff two session specs (`GET /sessions/diff`)
+- [ ] **Webhook / SSE “new endpoints” stream** — push instead of poll-only `wait_for_endpoints` / `spec_diff`
+- [ ] **MCP vault safety** — never log token values; optional auto-redact tool results when host agent has logging enabled
+- [ ] **Auto-update default off for dirty trees** — or limit auto-update to `mcp/` package only (avoid whole monorepo `git pull`)
+- [ ] **Explore: auth form helper** — optional login URL + selector map, or document storageState recipes more deeply
+- [ ] **Explore: network log harvest** — record XHR/fetch URLs seen during crawl even without full body (candidate endpoints)
+
+### GraphQL & special protocols
+
+- [ ] **GraphQL → pseudo-paths** — optional map `query:GetUser` → `/graphql#GetUser` or OpenAPI path extensions for cleaner agent lists
+- [ ] **GraphQL schema introspection** — if `__schema` allowed, import types (opt-in, noisy)
+- [ ] **gRPC / Connect-RPC detection** — mark binary content + path; don’t pretend JSON schema
+- [ ] **Server-Sent Events (SSE)** — detect `text/event-stream`, capture event names if JSON
+
+### Dashboard
+
+- [ ] **Modular dashboard** — split `main.js` into modules; add smoke tests for render helpers
+- [ ] **Request body tab** — first-class UI (already partially in raw panel)
+- [ ] **GraphQL ops panel** — expandable per operation with variables + last response
+- [ ] **Endpoint notes/tags** — operator annotations (`auth`, `admin`, `payments`) stored in session extensions for agents
+- [ ] **Hit counts & last status chips** — volume / reliability signal in sidebar
+- [ ] **HAR drag-and-drop** — full drop zone + progress for large files
+- [ ] **PWA offline spec cache** — last export available without export API
+
+### Replay & codegen
+
+- [ ] **Replay multi-language** — curl, HTTPie, TypeScript `fetch`, Go, in addition to Python
+- [ ] **Path param substitution in replay** — fill `{id}` from last observed raw path or example values
+- [ ] **OpenAPI examples** — populate `example` / `examples` from last payloads (redacted)
+- [ ] **SDK post-process** — inject base URL from `servers` and document vault header wiring
+
+---
+
+## P3 — Hardening, distribution, polish
+
+### Recon depth
+
+- [ ] **Certificate pinning / mTLS playbook** — docs + detect TLS failures that look like pinning
+- [ ] **HTTP/2 push / trailers** — capture if go-mitmproxy exposes them
+- [ ] **Redirect chain mapping** — optional 3xx as linked operations (currently skipped)
+- [ ] **Frequency-based path templating** — learn “this segment varies a lot under this prefix → template”
+- [ ] **OpenAPI 3.1 option** — nullable/type arrays native; dual export mode
+
+### Testing & quality
+
+- [ ] **Integration suite for HAR fixtures** — real-world truncated HARs in `testdata/`
+- [ ] **GraphQL fixture matrix** — batch ops, anonymous shorthand, mutations, subscriptions
+- [ ] **Proxy golden tests** — end-to-end MITM with mock backend for request body + status codes
+- [ ] **Dashboard e2e** — Playwright against docker stack (import HAR, open endpoint, export)
+
+### Release & docs
+
+- [ ] **arm64 GHCR builds in CI**
+- [ ] **Version surface area** — single source of truth for app/MCP versions (today CHANGELOG + mcp/package.json)
+- [ ] **Threat model doc** — MITM CA, vault, export API, agent access (one page for security reviews)
+- [ ] **“First capture” tutorial video/GIF** — HAR path vs live MITM path
+- [ ] **Stable v1.1.3 cut** — when beta.9+ soaks: merge to main, tag `:v1.1.3`, pin README examples
+
+### Explicitly still out of scope (revisit later)
+
+- [ ] Active API fuzzing / brute-force discovery
+- [ ] Cloud multi-tenant hosted ShadowSchema
+- [ ] Replacing Burp/ZAP as full proxy workbench
+- [ ] Automated exploit generation
+
+---
+
+## Suggested next sprint (opinionated order)
+
+1. [x] **Vault redaction modes + strip secrets from SDK input** — `/vault?include_values=`, MCP default redact, `specForSDK` sanitizes samples/vault
+2. [x] **Multi-sample / required-param inference** — `x-hit-count`, `x-payload-samples`, `x-param-stats`, typed query params, required after consistent hits
+3. [x] **Session diff + OpenAPI validate MCP tools** — `GET /sessions/diff`, `GET /validate-spec`, MCP `session_diff` + `validate_spec`
+4. **Multi-arch Docker** — unblocks half the contributor base
+5. **npm publish MCP** — once soak tests pass on beta.9
+6. **Dashboard modularization + GraphQL ops panel** — UX for new features
+7. **Stable v1.1.3** after soak
+
+---
+
+## Notes for implementers
+
+- Prefer extending export API first, then thin MCP wrappers (same pattern as Phase 1–3).
+- Keep “inferred not authoritative” language on any new schema tools.
+- Never put live tokens in default export artifacts or commit-friendly outputs.
+- HAR + live MITM should remain feature-parity for capture fields (request body, status, GraphQL, vault).

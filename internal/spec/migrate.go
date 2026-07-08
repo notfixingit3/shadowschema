@@ -109,18 +109,19 @@ func specForSDK(doc *openapi3.T) (*openapi3.T, int, error) {
 		return nil, 0, nil
 	}
 
-	data, err := json.Marshal(doc)
+	filtered, err := cloneDocJSON(doc)
 	if err != nil {
 		return nil, 0, err
 	}
-
-	var filtered openapi3.T
-	if err := json.Unmarshal(data, &filtered); err != nil {
-		return nil, 0, err
+	if filtered == nil {
+		return nil, 0, nil
 	}
 
+	// Never feed live samples / vault payloads into OpenAPI Generator.
+	sanitizeDocForExport(filtered)
+
 	if filtered.Paths == nil {
-		return &filtered, 0, nil
+		return filtered, 0, nil
 	}
 
 	excluded := 0
@@ -145,5 +146,5 @@ func specForSDK(doc *openapi3.T) (*openapi3.T, int, error) {
 		}
 	}
 
-	return &filtered, excluded, nil
+	return filtered, excluded, nil
 }

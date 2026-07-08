@@ -118,9 +118,29 @@ export class ShadowSchemaClient {
     return response.json() as Promise<string[]>;
   }
 
-  async getVault(): Promise<AuthCredential[]> {
-    const response = await this.request("/vault");
+  async getVault(options: { includeValues?: boolean } = {}): Promise<AuthCredential[]> {
+    // Default redacted — pass includeValues: true only when replaying / wiring auth.
+    const includeValues = options.includeValues === true;
+    const response = await this.request(
+      this.withQuery("/vault", {
+        include_values: includeValues ? "1" : "0",
+      }),
+    );
     return response.json() as Promise<AuthCredential[]>;
+  }
+
+  async diffSessions(from: number, to: number): Promise<Record<string, unknown>> {
+    const response = await this.request(
+      this.withQuery("/sessions/diff", { from, to }),
+    );
+    return response.json() as Promise<Record<string, unknown>>;
+  }
+
+  async validateSpec(sessionId?: number): Promise<Record<string, unknown>> {
+    const response = await this.request(
+      this.withQuery("/validate-spec", { session_id: sessionId }),
+    );
+    return response.json() as Promise<Record<string, unknown>>;
   }
 
   async addTargetDomain(domain: string): Promise<void> {

@@ -450,7 +450,9 @@ The background export server on `:38081` powers the dashboard and CLI tooling:
 | `/endpoints/{path...}` | GET | Single endpoint detail (e.g. `/endpoints/api/v1/users`) |
 | `/export-map` | GET | Live OpenAPI spec (JSON or `?format=yaml`, `?path_prefix=`, `?session_id=`, `?include_secrets=1` for vault tokens) |
 | `/import-har` | POST | Import HAR 1.2 JSON (raw body or multipart `har`/`file`). Query: `only_matching_target` (default true) |
-| `/vault` | GET | Captured auth credentials |
+| `/vault` | GET | Captured auth credentials. **Token values redacted by default**; pass `?include_values=1` for secrets (local UI/replay only) |
+| `/sessions/diff` | GET, POST | Diff two sessions (`from` / `to` ids) — added/removed paths and method changes |
+| `/validate-spec` | GET, POST | Validate inferred OpenAPI (`?session_id=`); returns errors/warnings for agents |
 | `/discovered` | GET | Out-of-scope domains seen via CONNECT |
 | `/sessions` | GET, POST | List or create recon sessions |
 | `/sessions/switch` | POST | Activate a saved session |

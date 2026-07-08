@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- **Vault redaction modes:** `/vault` redacts token values by default; `?include_values=1` returns secrets. MCP `shadowschema_get_vault` defaults to redacted (`include_values: false`).
+- **Secret-safe SDK generation:** `specForSDK` strips vault payloads, last samples, WebSocket frames, and GraphQL op payloads before OpenAPI Generator runs.
+- **Multi-sample observation:** Per-operation `x-hit-count`, `x-status-histogram`, `x-payload-samples` (last 5), `x-param-stats`.
+- **Required / typed params:** Query params infer integer/bool/uuid; params become `required` after consistent observation (min 3 hits, zero misses).
+- **Session diff:** `GET|POST /sessions/diff` and MCP `shadowschema_session_diff`.
+- **OpenAPI validate:** `GET|POST /validate-spec` and MCP `shadowschema_validate_spec` (kin-openapi + path-param / servers warnings).
+
+### Changed
+- **MCP:** Version `0.4.1` — 20 tools.
+- **Dashboard:** Vault and replay fetch `/vault?include_values=1`.
+
 ## [1.1.3-beta.9] - 2026-07-08
 
 ### Added

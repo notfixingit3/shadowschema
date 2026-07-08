@@ -344,21 +344,6 @@ func (s *SpecManager) AddEndpoint(req *http.Request, path string, statusCode int
 
 	ensurePathParameters(operation, path)
 
-	for key := range req.URL.Query() {
-		exists := false
-		for _, p := range operation.Parameters {
-			if p.Value != nil && p.Value.Name == key && p.Value.In == "query" {
-				exists = true
-				break
-			}
-		}
-		if !exists {
-			param := openapi3.NewQueryParameter(key)
-			param.Schema = openapi3.NewSchemaRef("", openapi3.NewStringSchema())
-			operation.AddParameter(param)
-		}
-	}
-
 	ignoreHeaders := map[string]bool{
 		"Host": true, "Connection": true, "Accept-Encoding": true, "User-Agent": true,
 		"Accept": true, "Accept-Language": true, "Sec-Fetch-Mode": true, "Sec-Fetch-Site": true,
@@ -368,23 +353,8 @@ func (s *SpecManager) AddEndpoint(req *http.Request, path string, statusCode int
 		// Cookie is captured in the Auth Vault, not as a free-form header parameter.
 		"Cookie": true,
 	}
-	for key := range req.Header {
-		canonical := http.CanonicalHeaderKey(key)
-		if !ignoreHeaders[canonical] {
-			exists := false
-			for _, p := range operation.Parameters {
-				if p.Value != nil && p.Value.Name == canonical && p.Value.In == "header" {
-					exists = true
-					break
-				}
-			}
-			if !exists {
-				param := openapi3.NewHeaderParameter(canonical)
-				param.Schema = openapi3.NewSchemaRef("", openapi3.NewStringSchema())
-				operation.AddParameter(param)
-			}
-		}
-	}
+	// Multi-sample history, hit counts, typed query params, required inference.
+	recordObservationStats(operation, req, statusCode, responseBody, requestBody, ignoreHeaders)
 
 	statusKey := strconv.Itoa(statusCode)
 	newSchema := parser.ParseResponseBody(responseBody)
@@ -541,6 +511,7 @@ func (s *SpecManager) mountExportRoutes(mux *http.ServeMux) {
 	s.mountHealthAndEndpointRoutes(mux)
 	s.mountReplayRoute(mux)
 	s.mountHARImportRoute(mux)
+	s.mountDiffAndValidateRoutes(mux)
 
 	mux.HandleFunc("/export-map", func(w http.ResponseWriter, r *http.Request) {
 		enableCORS(w, r)
@@ -694,6 +665,10 @@ func (s *SpecManager) mountExportRoutes(mux *http.ServeMux) {
 			return
 		}
 		if r.Method == "GET" {
+			// Default: redact token values. Pass include_values=1 for full secrets
+			// (dashboard vault UI, local replay). Safer default if export API is exposed.
+			includeValues := parseIncludeSecrets(r.URL.Query().Get("include_values"))
+
 			s.mu.Lock()
 			rows, err := s.dbQuery(`SELECT header_name, token_value, first_seen FROM auth_vault WHERE session_id = ? ORDER BY first_seen DESC`, s.SessionID)
 			s.mu.Unlock()
@@ -711,8 +686,14 @@ func (s *SpecManager) mountExportRoutes(mux *http.ServeMux) {
 					credentials = append(credentials, ac)
 				}
 			}
+			if !includeValues {
+				credentials = redactCredentials(credentials)
+			}
 
 			w.Header().Set("Content-Type", "application/json")
+			if !includeValues {
+				w.Header().Set("X-ShadowSchema-Vault-Redacted", "1")
+			}
 			_ = json.NewEncoder(w).Encode(credentials)
 			return
 		}

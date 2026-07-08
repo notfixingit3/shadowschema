@@ -68,6 +68,7 @@ func TestVaultEndpointReturnsCredentials(t *testing.T) {
 	server := httptest.NewServer(sm.ExportHandler())
 	defer server.Close()
 
+	// Default vault response is redacted.
 	resp, err := http.Get(server.URL + "/vault")
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
@@ -78,8 +79,31 @@ func TestVaultEndpointReturnsCredentials(t *testing.T) {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
 	}
 
+	var redacted []AuthCredential
+	if err := json.NewDecoder(resp.Body).Decode(&redacted); err != nil {
+		t.Fatalf("failed to decode vault response: %v", err)
+	}
+	foundRedacted := false
+	for _, credential := range redacted {
+		if credential.HeaderName == "X-Api-Key" {
+			if credential.TokenValue != "[REDACTED]" {
+				t.Fatalf("expected redacted token by default, got %#v", credential)
+			}
+			foundRedacted = true
+		}
+	}
+	if !foundRedacted {
+		t.Fatalf("expected redacted credential, got %#v", redacted)
+	}
+
+	resp2, err := http.Get(server.URL + "/vault?include_values=1")
+	if err != nil {
+		t.Fatalf("include_values request failed: %v", err)
+	}
+	defer resp2.Body.Close()
+
 	var credentials []AuthCredential
-	if err := json.NewDecoder(resp.Body).Decode(&credentials); err != nil {
+	if err := json.NewDecoder(resp2.Body).Decode(&credentials); err != nil {
 		t.Fatalf("failed to decode vault response: %v", err)
 	}
 
@@ -449,7 +473,7 @@ func TestExportAPITokenAuth(t *testing.T) {
 		t.Fatalf("expected 401 without token, got %d", resp.StatusCode)
 	}
 
-	req, _ := http.NewRequest(http.MethodGet, server.URL+"/vault", nil)
+	req, _ := http.NewRequest(http.MethodGet, server.URL+"/vault?include_values=1", nil)
 	req.Header.Set("X-ShadowSchema-Token", "test-secret-token")
 	resp2, err := http.DefaultClient.Do(req)
 	if err != nil {

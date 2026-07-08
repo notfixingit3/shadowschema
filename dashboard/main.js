@@ -170,7 +170,7 @@ if (vaultBtn && vaultModal && vaultClose && vaultList) {
     vaultModal.classList.remove('hidden');
     vaultList.innerHTML = '<tr><td colspan="4" style="text-align:center; padding: 1rem;">Loading...</td></tr>';
     
-    fetch(`${API_URL}/vault`)
+    fetch(`${API_URL}/vault?include_values=1`)
       .then(res => res.json())
       .then(creds => {
         vaultList.innerHTML = '';
@@ -369,7 +369,7 @@ async function resolveVaultHeaders(spec) {
   }
 
   try {
-    const res = await fetch(`${API_URL}/vault`);
+    const res = await fetch(`${API_URL}/vault?include_values=1`);
     if (!res.ok) return headers;
     const creds = await res.json();
     creds.forEach(c => {
