@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -57,9 +56,32 @@ func startTestProxy(t *testing.T, sm *spec.SpecManager) (string, func()) {
 		t.Fatalf("failed to create newProxyServer: %v", err)
 	}
 
+	errCh := make(chan error, 1)
 	go func() {
-		_ = p.Start()
+		errCh <- p.Start()
 	}()
+
+	// Wait until the proxy accepts TCP connections (or fails to start).
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		select {
+		case err := <-errCh:
+			if err != nil {
+				t.Fatalf("proxy Start failed: %v", err)
+			}
+			t.Fatalf("proxy Start returned before accepting connections")
+		default:
+		}
+		conn, dialErr := net.DialTimeout("tcp", addr, 50*time.Millisecond)
+		if dialErr == nil {
+			_ = conn.Close()
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("proxy did not accept connections on %s: %v", addr, dialErr)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
 
 	cleanup := func() {
 		_ = p.Close()
@@ -248,23 +270,14 @@ func setupProxyTest(t *testing.T) {
 	t.Helper()
 
 	dir := t.TempDir()
-	// Prefer env isolation over os.Chdir (unsafe under parallel tests).
+	certDir := filepath.Join(dir, "certs")
 	t.Setenv("SHADOWSCHEMA_DB_PATH", filepath.Join(dir, "shadowschema.db"))
-	t.Setenv("SHADOWSCHEMA_CERT_DIR", filepath.Join(dir, "certs"))
+	t.Setenv("SHADOWSCHEMA_CERT_DIR", certDir)
 	t.Setenv("HTTP_PROXY", "")
 	t.Setenv("HTTPS_PROXY", "")
 	t.Setenv("ALL_PROXY", "")
 	t.Setenv("NO_PROXY", "")
 
-	// go-mitmproxy still resolves CaRootPath relative to CWD; chdir only for that.
-	if err := os.Chdir(dir); err != nil {
-		t.Fatalf("failed to chdir to temp dir: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = os.Chdir(t.TempDir()) // leave disposable dir; process ends with test
-	})
-
-	certDir := filepath.Join(dir, "certs")
 	if err := proxy.InitCA(certDir); err != nil {
 		t.Fatalf("InitCA failed: %v", err)
 	}

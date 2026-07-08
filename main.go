@@ -165,10 +165,17 @@ func (a *ShadowSchemaAddon) WebSocketMessage(f *mitmproxy.Flow) {
 	fmt.Printf("[WS]   %-3s  %s (%s, %d bytes)\n", strings.ToUpper(direction), dedupedPath, wstap.OpcodeName(opcode), len(msg.Content))
 }
 
+func certRootPath() string {
+	if d := strings.TrimSpace(os.Getenv("SHADOWSCHEMA_CERT_DIR")); d != "" {
+		return d
+	}
+	return "certs"
+}
+
 func newProxyServer(specManager *spec.SpecManager, port string) (*mitmproxy.Proxy, error) {
 	opts := &mitmproxy.Options{
 		Addr:        port,
-		CaRootPath:  "certs",
+		CaRootPath:  certRootPath(),
 		SslInsecure: true,
 	}
 
