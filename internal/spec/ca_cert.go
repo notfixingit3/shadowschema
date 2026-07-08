@@ -25,7 +25,7 @@ func (s *SpecManager) mountCACertRoute(mux *http.ServeMux) {
 			return
 		}
 
-		certPath := filepath.Join(certDir(), "ca.crt")
+		certPath := filepath.Join(certDir(), "mitmproxy-ca-cert.pem")
 		// #nosec G304 -- path is constrained to certDir()/ca.crt
 		data, err := os.ReadFile(certPath)
 		if err != nil {

@@ -4,9 +4,9 @@ ShadowSchema is built upon several excellent open-source libraries. We acknowled
 
 ### Backend Infrastructure (Go)
 
-* **goproxy** ([elazarl/goproxy](https://github.com/elazarl/goproxy))
-  A customizable HTTP proxy library for Go.
-  *License: BSD-3-Clause*
+* **go-mitmproxy** ([lqqyt2423/go-mitmproxy](https://github.com/lqqyt2423/go-mitmproxy))
+  A Golang implementation of mitmproxy with HTTP/2 and WebSocket support.
+  *License: MIT*
 
 * **kin-openapi** ([getkin/kin-openapi](https://github.com/getkin/kin-openapi))
   OpenAPI 3.0 implementation for Go.

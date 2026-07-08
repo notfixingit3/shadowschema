@@ -15,7 +15,7 @@ func TestInitCAGeneratesAndReloads(t *testing.T) {
 		t.Fatalf("InitCA failed on first run: %v", err)
 	}
 
-	for _, name := range []string{"ca.crt", "ca.key"} {
+	for _, name := range []string{"mitmproxy-ca-cert.pem", "mitmproxy-ca.pem"} {
 		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
 			t.Fatalf("expected %s to exist: %v", name, err)
 		}

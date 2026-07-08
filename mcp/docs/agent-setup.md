@@ -559,6 +559,7 @@ Or log in manually in a headed browser through the proxy, export cookies, and re
 | Auto-update logs on startup | Running from a local git clone | Expected when upstream exists; harmless. Set `SHADOWSCHEMA_AUTO_UPDATE=false` to disable |
 | Stuck on "initializing" | MCP command is `npm start` | Use `node /path/to/shadowschema/mcp/dist/index.js` instead (`npm run build` first) |
 
+
 ### Quick health check
 
 ```bash

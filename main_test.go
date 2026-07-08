@@ -42,6 +42,32 @@ func TestIsPortAvailable(t *testing.T) {
 	}
 }
 
+func startTestProxy(t *testing.T, sm *spec.SpecManager) (string, func()) {
+	t.Helper()
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to find free port: %v", err)
+	}
+	addr := ln.Addr().String()
+	_ = ln.Close()
+
+	p, err := newProxyServer(sm, addr)
+	if err != nil {
+		t.Fatalf("failed to create newProxyServer: %v", err)
+	}
+
+	go func() {
+		_ = p.Start()
+	}()
+
+	cleanup := func() {
+		_ = p.Close()
+	}
+
+	return addr, cleanup
+}
+
 func TestProxyInterceptsTargetJSON(t *testing.T) {
 	setupProxyTest(t)
 
@@ -53,10 +79,11 @@ func TestProxyInterceptsTargetJSON(t *testing.T) {
 
 	targetHost := hostFromURL(backend.URL)
 	sm := spec.NewSpecManager(targetHost)
-	proxyServer := httptest.NewServer(newProxyServer(sm))
-	defer proxyServer.Close()
+	
+	proxyAddr, cleanup := startTestProxy(t, sm)
+	defer cleanup()
 
-	client := proxiedClient(proxyServer.URL)
+	client := proxiedClient("http://" + proxyAddr)
 	resp, err := client.Get(backend.URL + "/api/hello")
 	if err != nil {
 		t.Fatalf("proxied request failed: %v", err)
@@ -77,8 +104,9 @@ func TestProxyCapturesVaultCredential(t *testing.T) {
 
 	targetHost := hostFromURL(backend.URL)
 	sm := spec.NewSpecManager(targetHost)
-	proxyServer := httptest.NewServer(newProxyServer(sm))
-	defer proxyServer.Close()
+	
+	proxyAddr, cleanup := startTestProxy(t, sm)
+	defer cleanup()
 
 	req, err := http.NewRequest(http.MethodGet, backend.URL+"/api/secure", nil)
 	if err != nil {
@@ -86,7 +114,7 @@ func TestProxyCapturesVaultCredential(t *testing.T) {
 	}
 	req.Header.Set("Authorization", token)
 
-	client := proxiedClient(proxyServer.URL)
+	client := proxiedClient("http://" + proxyAddr)
 	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatalf("proxied request failed: %v", err)
@@ -132,8 +160,9 @@ func TestProxyRegistersWebSocketUpgrade(t *testing.T) {
 
 	targetHost := hostFromURL(backend.URL)
 	sm := spec.NewSpecManager(targetHost)
-	proxyServer := httptest.NewServer(newProxyServer(sm))
-	defer proxyServer.Close()
+	
+	proxyAddr, cleanup := startTestProxy(t, sm)
+	defer cleanup()
 
 	req, err := http.NewRequest(http.MethodGet, backend.URL+"/ws/live", nil)
 	if err != nil {
@@ -143,7 +172,7 @@ func TestProxyRegistersWebSocketUpgrade(t *testing.T) {
 	req.Header.Set("Upgrade", "websocket")
 	req.Header.Set("Sec-WebSocket-Version", "13")
 
-	client := proxiedClient(proxyServer.URL)
+	client := proxiedClient("http://" + proxyAddr)
 	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatalf("proxied websocket upgrade request failed: %v", err)
@@ -177,10 +206,11 @@ func TestProxyRecordsDiscoveredNonTargetHost(t *testing.T) {
 
 	targetHost := hostFromURL(backend.URL)
 	sm := spec.NewSpecManager("not-" + targetHost)
-	proxyServer := httptest.NewServer(newProxyServer(sm))
-	defer proxyServer.Close()
+	
+	proxyAddr, cleanup := startTestProxy(t, sm)
+	defer cleanup()
 
-	client := proxiedTLSClient(proxyServer.URL)
+	client := proxiedTLSClient("http://" + proxyAddr)
 	resp, err := client.Get(backend.URL + "/api/other")
 	if err != nil {
 		t.Fatalf("proxied request failed: %v", err)

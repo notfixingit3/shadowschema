@@ -1,10 +1,8 @@
 package main
 
 import (
-	"bytes"
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"net/http"
@@ -12,9 +10,8 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
-	"time"
 
-	"github.com/elazarl/goproxy"
+	mitmproxy "github.com/lqqyt2423/go-mitmproxy/proxy"
 
 	"shadowschema/internal/proxy"
 	"shadowschema/internal/router"
@@ -37,80 +34,121 @@ func isPortAvailable(port string) bool {
 	return true
 }
 
-func newProxyServer(specManager *spec.SpecManager) *goproxy.ProxyHttpServer {
-	p := goproxy.NewProxyHttpServer()
-	p.Verbose = false
+type ShadowSchemaAddon struct {
+	mitmproxy.BaseAddon
+	specManager *spec.SpecManager
+}
 
-	p.OnRequest().HandleConnectFunc(func(host string, ctx *goproxy.ProxyCtx) (*goproxy.ConnectAction, string) {
-		if specManager.IsTarget(host) {
-			return goproxy.MitmConnect, host
+// Request intercepts incoming requests
+func (a *ShadowSchemaAddon) Request(f *mitmproxy.Flow) {
+	if f.Request == nil {
+		return
+	}
+
+	// Delete Accept-Encoding to prevent compressed bodies from target server
+	f.Request.Header.Del("Accept-Encoding")
+
+	// Save credentials if present
+	authHeaders := []string{"Authorization", "X-Api-Key", "X-Auth-Token", "Session-Token"}
+	for _, h := range authHeaders {
+		if val := f.Request.Header.Get(h); val != "" {
+			a.specManager.SaveVaultCredential(h, val)
 		}
-		specManager.AddDiscoveredDomain(host)
-		return goproxy.OkConnect, host
+	}
+
+	if strings.ToLower(f.Request.Header.Get("Upgrade")) == "websocket" {
+		dedupedPath := router.DeduplicatePath(f.Request.URL.Path)
+		a.specManager.AddWebSocket(f.Request.Raw(), dedupedPath)
+		fmt.Printf("[WS]   %-6s %s -> %s\n", f.Request.Method, f.Request.URL.Path, dedupedPath)
+		return
+	}
+
+	// Log HTTP request
+	fmt.Printf("[REQ]  %-6s %s\n", f.Request.Method, f.Request.URL.Path)
+}
+
+// Response intercepts responses
+func (a *ShadowSchemaAddon) Response(f *mitmproxy.Flow) {
+	if f.Response == nil || f.Request == nil {
+		return
+	}
+
+	// Decode body if it is compressed
+	bodyBytes, err := f.Response.DecodedBody()
+	if err != nil {
+		bodyBytes = f.Response.Body
+	}
+
+	dedupedPath := router.DeduplicatePath(f.Request.URL.Path)
+	fmt.Printf("[RESP] %-6d %s -> %s\n", f.Response.StatusCode, f.Request.URL.Path, dedupedPath)
+
+	if f.Response.StatusCode >= 200 && f.Response.StatusCode < 300 && len(bodyBytes) > 0 {
+		a.specManager.AddEndpoint(f.Request.Raw(), dedupedPath, bodyBytes)
+	}
+}
+
+// WebSocketStart hook
+func (a *ShadowSchemaAddon) WebSocketStart(f *mitmproxy.Flow) {
+	dedupedPath := router.DeduplicatePath(f.Request.URL.Path)
+	a.specManager.AddWebSocket(f.Request.Raw(), dedupedPath)
+	fmt.Printf("[WS]   %-6s %s -> %s\n", f.Request.Method, f.Request.URL.Path, dedupedPath)
+}
+
+// WebSocketMessage hook
+func (a *ShadowSchemaAddon) WebSocketMessage(f *mitmproxy.Flow) {
+	if f.WebScoket == nil || len(f.WebScoket.Messages) == 0 {
+		return
+	}
+	msg := f.WebScoket.Messages[len(f.WebScoket.Messages)-1]
+
+	dedupedPath := router.DeduplicatePath(f.Request.URL.Path)
+	direction := "out"
+	if msg.FromClient {
+		direction = "in"
+	}
+
+	opcode := byte(msg.Type)
+	a.specManager.AddWebSocketFrame(dedupedPath, direction, opcode, msg.Content, 1)
+
+	fmt.Printf("[WS]   %-3s  %s (%s, %d bytes)\n", strings.ToUpper(direction), dedupedPath, wstap.OpcodeName(opcode), len(msg.Content))
+}
+
+func newProxyServer(specManager *spec.SpecManager, port string) (*mitmproxy.Proxy, error) {
+	opts := &mitmproxy.Options{
+		Addr:        port,
+		CaRootPath:  "certs",
+		SslInsecure: true,
+	}
+
+	p, err := mitmproxy.NewProxy(opts)
+	if err != nil {
+		return nil, err
+	}
+
+	p.SetShouldInterceptRule(func(req *http.Request) bool {
+		host := req.URL.Host
+		if host == "" {
+			host = req.Host
+		}
+		if h, _, err := net.SplitHostPort(host); err == nil {
+			host = h
+		}
+
+		isTarget := specManager.IsTarget(host)
+		if !isTarget {
+			if req.Method == http.MethodConnect {
+				specManager.AddDiscoveredDomain(host)
+			}
+			return false
+		}
+		return true
 	})
 
-	condition := goproxy.ReqConditionFunc(func(req *http.Request, ctx *goproxy.ProxyCtx) bool {
-		return specManager.IsTarget(req.URL.Host) || specManager.IsTarget(req.Host)
+	p.AddAddon(&ShadowSchemaAddon{
+		specManager: specManager,
 	})
 
-	p.OnRequest(condition).DoFunc(
-		func(r *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
-			r.Header.Del("Accept-Encoding")
-
-			authHeaders := []string{"Authorization", "X-Api-Key", "X-Auth-Token", "Session-Token"}
-			for _, h := range authHeaders {
-				if val := r.Header.Get(h); val != "" {
-					specManager.SaveVaultCredential(h, val)
-				}
-			}
-
-			if strings.ToLower(r.Header.Get("Upgrade")) == "websocket" {
-				dedupedPath := router.DeduplicatePath(r.URL.Path)
-				specManager.AddWebSocket(r, dedupedPath)
-				fmt.Printf("[WS]   %-6s %s -> %s\n", r.Method, r.URL.Path, dedupedPath)
-				return r, nil
-			}
-
-			fmt.Printf("[REQ]  %-6s %s\n", r.Method, r.URL.Path)
-			return r, nil
-		})
-
-	p.OnResponse(condition).DoFunc(
-		func(resp *http.Response, ctx *goproxy.ProxyCtx) *http.Response {
-			if resp == nil || resp.Body == nil {
-				return resp
-			}
-
-			if wstap.IsUpgradeResponse(resp) && ctx.Req != nil {
-				dedupedPath := router.DeduplicatePath(ctx.Req.URL.Path)
-				if rw, ok := resp.Body.(io.ReadWriter); ok {
-					resp.Body = wstap.NewFrameTap(rw, func(direction string, opcode byte, payload []byte, info wstap.FrameInfo) {
-						specManager.AddWebSocketFrame(dedupedPath, direction, opcode, payload, info.Fragments)
-						fragNote := ""
-						if info.Fragments > 1 {
-							fragNote = fmt.Sprintf(", %d frags", info.Fragments)
-						}
-						fmt.Printf("[WS]   %-3s  %s (%s, %d bytes%s)\n", strings.ToUpper(direction), dedupedPath, wstap.OpcodeName(opcode), len(payload), fragNote)
-					})
-				}
-				return resp
-			}
-
-			bodyBytes, err := io.ReadAll(resp.Body)
-			if err == nil {
-				resp.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
-
-				dedupedPath := router.DeduplicatePath(ctx.Req.URL.Path)
-				fmt.Printf("[RESP] %-6d %s -> %s\n", resp.StatusCode, ctx.Req.URL.Path, dedupedPath)
-
-				if resp.StatusCode >= 200 && resp.StatusCode < 300 && len(bodyBytes) > 0 {
-					specManager.AddEndpoint(ctx.Req, dedupedPath, bodyBytes)
-				}
-			}
-			return resp
-		})
-
-	return p
+	return p, nil
 }
 
 func main() {
@@ -134,7 +172,10 @@ func main() {
 	// Start export server in background
 	go specManager.StartExportServer(*exportPort)
 
-	p := newProxyServer(specManager)
+	p, err := newProxyServer(specManager, *port)
+	if err != nil {
+		log.Fatalf("Failed to create proxy server: %v\n", err)
+	}
 
 	// Handle graceful shutdown
 	c := make(chan os.Signal, 1)
@@ -148,14 +189,10 @@ func main() {
 		} else {
 			fmt.Println("[INFO] Successfully exported openapi.json")
 		}
+		_ = p.Close()
 		os.Exit(0)
 	}()
 
 	fmt.Printf("Starting MITM API Mapper on %s (Default target: %s)\n", *port, *targetDomain)
-	srv := &http.Server{
-		Addr:              *port,
-		Handler:           p,
-		ReadHeaderTimeout: 10 * time.Second,
-	}
-	log.Fatal(srv.ListenAndServe())
+	log.Fatal(p.Start())
 }

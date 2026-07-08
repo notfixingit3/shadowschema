@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.1.3-beta.8] - 2026-07-08
+
+### Changed
+- **Proxy Engine**: Migrated the core proxy engine from `elazarl/goproxy` to `go-mitmproxy`, bringing native support for HTTP/2 multiplexing and WebSocket frame interception.
+- **CA Management**: Added automated migration logic to convert legacy `ca.crt` / `ca.key` files to the new `mitmproxy-ca-cert.pem` / `mitmproxy-ca.pem` names on startup, preserving trusted browser/OS certificate stores.
+- **Go Standard Library**: Upgraded the project to compile with Go 1.26.5, resolving standard library vulnerabilities (GO-2026-5856, GO-2026-4970).
+
 ## [1.1.3-beta.7] - 2026-06-26
 
 ### Added
