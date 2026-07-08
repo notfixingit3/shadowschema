@@ -642,7 +642,7 @@ Include a **combined workflow** snippet in `agent-setup.md`:
 2. [x] **Multi-sample / required-param inference**
 3. [x] **Session diff + OpenAPI validate MCP tools**
 4. [x] **Multi-arch Docker**
-5. **npm publish MCP** — once soak tests pass on beta.10
+5. **npm publish MCP** — once soak tests pass on beta.11
 6. [x] **Dashboard modularization + GraphQL ops panel**
 7. [x] **Unique path params, vault logging, flush-on-switch, no query tokens, dashboard XSS** (beta.10)
 8. **Stable v1.1.3** after soak

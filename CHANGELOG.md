@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.3-beta.11] - 2026-07-08
+
+### Fixed
+- **CI gosec:** Scope CA cert I/O under `os.Root`, clamp WebSocket opcode cast, document bounded HAR multipart parse (build workflow green again).
+- **CI multi-arch Docker:** Build dashboard on `$BUILDPLATFORM` so Vite/lightningcss does not need arm64-musl optional deps under QEMU; cross-compile proxy with `TARGETOS`/`TARGETARCH`.
+- **CI proxy tests:** Use `SHADOWSCHEMA_CERT_DIR` for mitmproxy CA path and wait for the proxy to accept connections before dialing.
+- **Workflows:** `setup-go` reads version from `go.mod` instead of hardcoding 1.22.
+
 ## [1.1.3-beta.10] - 2026-07-08
 
 ### Added
