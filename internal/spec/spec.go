@@ -33,6 +33,9 @@ type SpecManager struct {
 
 	saveTimerMu sync.Mutex
 	saveTimer   *time.Timer
+
+	// bg tracks background DB work (discovered domains) so Close can wait.
+	bg sync.WaitGroup
 }
 
 type SessionMeta struct {
@@ -164,9 +167,21 @@ func (s *SpecManager) AddDiscoveredDomain(host string) {
 		return
 	}
 
+	s.bg.Add(1)
 	go func() {
+		defer s.bg.Done()
 		_ = s.persistDiscoveredDomain(sessionID, host)
 	}()
+}
+
+// Close waits for background work, flushes the active session, and closes the DB.
+func (s *SpecManager) Close() error {
+	s.bg.Wait()
+	s.Flush()
+	if s.db != nil {
+		return s.db.Close()
+	}
+	return nil
 }
 
 func (s *SpecManager) loadDiscoveredDomainsLocked(sessionID int) map[string]bool {

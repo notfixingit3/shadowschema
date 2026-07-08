@@ -1,4 +1,6 @@
-FROM golang:1.22-bookworm AS builder
+# syntax=docker/dockerfile:1
+# Cross-compile the static Go binary from the builder platform for TARGETARCH.
+FROM --platform=$BUILDPLATFORM golang:1.24-bookworm AS builder
 
 WORKDIR /src
 COPY go.mod go.sum ./
@@ -8,8 +10,10 @@ RUN go mod download
 COPY main.go ./
 COPY internal/ ./internal/
 
+ARG TARGETOS=linux
+ARG TARGETARCH
 ENV CGO_ENABLED=0
-RUN go build -trimpath -ldflags="-s -w" -o /out/shadowschema main.go
+RUN GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags="-s -w" -o /out/shadowschema main.go
 
 FROM debian:bookworm-slim
 

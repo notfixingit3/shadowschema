@@ -235,6 +235,8 @@ func (s *SpecManager) mountHARImportRoute(mux *http.ServeMux) {
 		var reader io.Reader = r.Body
 		ct := r.Header.Get("Content-Type")
 		if strings.HasPrefix(ct, "multipart/") {
+			// Body already capped by MaxBytesReader above; maxMemory also bounds in-memory parts.
+			// #nosec G120 -- maxMemory is 50 MiB and request body is MaxBytesReader-limited
 			if err := r.ParseMultipartForm(50 << 20); err != nil {
 				http.Error(w, "invalid multipart form: "+err.Error(), http.StatusBadRequest)
 				return

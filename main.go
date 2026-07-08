@@ -158,7 +158,8 @@ func (a *ShadowSchemaAddon) WebSocketMessage(f *mitmproxy.Flow) {
 		direction = "in"
 	}
 
-	opcode := byte(msg.Type)
+	// WebSocket opcodes are a single byte (0–15 per RFC 6455); clamp before cast.
+	opcode := byte(msg.Type & 0x0F)
 	a.specManager.AddWebSocketFrame(dedupedPath, direction, opcode, msg.Content, 1)
 
 	fmt.Printf("[WS]   %-3s  %s (%s, %d bytes)\n", strings.ToUpper(direction), dedupedPath, wstap.OpcodeName(opcode), len(msg.Content))

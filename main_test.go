@@ -248,14 +248,21 @@ func setupProxyTest(t *testing.T) {
 	t.Helper()
 
 	dir := t.TempDir()
-	if err := os.Chdir(dir); err != nil {
-		t.Fatalf("failed to chdir to temp dir: %v", err)
-	}
-
+	// Prefer env isolation over os.Chdir (unsafe under parallel tests).
+	t.Setenv("SHADOWSCHEMA_DB_PATH", filepath.Join(dir, "shadowschema.db"))
+	t.Setenv("SHADOWSCHEMA_CERT_DIR", filepath.Join(dir, "certs"))
 	t.Setenv("HTTP_PROXY", "")
 	t.Setenv("HTTPS_PROXY", "")
 	t.Setenv("ALL_PROXY", "")
 	t.Setenv("NO_PROXY", "")
+
+	// go-mitmproxy still resolves CaRootPath relative to CWD; chdir only for that.
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("failed to chdir to temp dir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(t.TempDir()) // leave disposable dir; process ends with test
+	})
 
 	certDir := filepath.Join(dir, "certs")
 	if err := proxy.InitCA(certDir); err != nil {

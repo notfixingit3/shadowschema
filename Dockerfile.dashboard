@@ -1,4 +1,7 @@
-FROM node:20-alpine AS builder
+# syntax=docker/dockerfile:1
+# Build the static dashboard on the builder platform (host arch). Dist is arch-independent,
+# which avoids lightningcss native optional-deps failures under QEMU arm64/musl cross-builds.
+FROM --platform=$BUILDPLATFORM node:20-alpine AS builder
 
 WORKDIR /app
 COPY dashboard/package.json dashboard/package-lock.json ./
