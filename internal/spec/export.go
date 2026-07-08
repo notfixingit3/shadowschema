@@ -30,12 +30,17 @@ func (s *SpecManager) buildExportDocumentFrom(doc *openapi3.T, sessionID int, in
 }
 
 func (s *SpecManager) listVaultCredentials() ([]AuthCredential, error) {
-	return s.listVaultCredentialsForSession(s.SessionID)
+	return s.listVaultCredentialsForSession(s.SessionID, "")
 }
 
-func (s *SpecManager) listVaultCredentialsForSession(sessionID int) ([]AuthCredential, error) {
+// listVaultCredentialsForSession returns vault entries for a session.
+// When hostFilter is non-empty, returns credentials for that host plus session-global
+// (empty host) entries, preferring host-specific values when both exist for a header.
+func (s *SpecManager) listVaultCredentialsForSession(sessionID int, hostFilter string) ([]AuthCredential, error) {
+	hostFilter = normalizeHost(hostFilter)
+
 	rows, err := s.dbQuery(
-		`SELECT header_name, token_value, first_seen FROM auth_vault WHERE session_id = ? ORDER BY first_seen DESC`,
+		`SELECT header_name, token_value, COALESCE(host, ''), first_seen FROM auth_vault WHERE session_id = ? ORDER BY first_seen DESC`,
 		sessionID,
 	)
 	if err != nil {
@@ -43,27 +48,62 @@ func (s *SpecManager) listVaultCredentialsForSession(sessionID int) ([]AuthCrede
 	}
 	defer rows.Close()
 
-	var credentials []AuthCredential
-	seen := make(map[string]bool)
+	var all []AuthCredential
 	for rows.Next() {
 		var ac AuthCredential
-		if err := rows.Scan(&ac.HeaderName, &ac.TokenValue, &ac.FirstSeen); err != nil {
+		if err := rows.Scan(&ac.HeaderName, &ac.TokenValue, &ac.Host, &ac.FirstSeen); err != nil {
 			continue
 		}
-		if seen[ac.HeaderName] {
-			continue
-		}
-		seen[ac.HeaderName] = true
-		credentials = append(credentials, ac)
+		ac.Host = normalizeHost(ac.Host)
+		all = append(all, ac)
 	}
-	return credentials, nil
+
+	if hostFilter == "" {
+		// Deduplicate by host+header (keep first = most recent).
+		seen := make(map[string]bool)
+		var out []AuthCredential
+		for _, ac := range all {
+			key := ac.Host + "\x00" + ac.HeaderName
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			out = append(out, ac)
+		}
+		return out, nil
+	}
+
+	// Prefer host-specific, fall back to empty-host globals for missing headers.
+	byHeaderHost := make(map[string]AuthCredential)
+	byHeaderGlobal := make(map[string]AuthCredential)
+	for _, ac := range all {
+		if ac.Host == hostFilter {
+			if _, ok := byHeaderHost[ac.HeaderName]; !ok {
+				byHeaderHost[ac.HeaderName] = ac
+			}
+		} else if ac.Host == "" {
+			if _, ok := byHeaderGlobal[ac.HeaderName]; !ok {
+				byHeaderGlobal[ac.HeaderName] = ac
+			}
+		}
+	}
+	out := make([]AuthCredential, 0, len(byHeaderHost)+len(byHeaderGlobal))
+	for _, ac := range byHeaderHost {
+		out = append(out, ac)
+	}
+	for name, ac := range byHeaderGlobal {
+		if _, ok := byHeaderHost[name]; !ok {
+			out = append(out, ac)
+		}
+	}
+	return out, nil
 }
 
 // enrichExportDocumentForSession attaches security schemes from the vault.
 // Token values are only included when includeSecrets is true (opt-in via
 // ?include_secrets=1). Default exports never embed live credentials.
 func (s *SpecManager) enrichExportDocumentForSession(doc *openapi3.T, sessionID int, includeSecrets bool) {
-	credentials, err := s.listVaultCredentialsForSession(sessionID)
+	credentials, err := s.listVaultCredentialsForSession(sessionID, "")
 	if err != nil || len(credentials) == 0 {
 		return
 	}

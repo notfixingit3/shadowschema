@@ -220,16 +220,24 @@ export function createServer(
           .optional()
           .default(false)
           .describe("When true, return live token values (SENSITIVE). Default redacts values."),
+        host: z
+          .string()
+          .optional()
+          .describe("Filter credentials for a target host (includes session-global entries)"),
       }),
     },
-    async ({ include_values }) => {
+    async ({ include_values, host }) => {
       try {
-        const credentials = await client.getVault({ includeValues: include_values });
+        const credentials = await client.getVault({
+          includeValues: include_values,
+          host,
+        });
         // Defense in depth: never pass secrets through unless explicitly requested.
         const safe = include_values ? credentials : redactVaultCredentials(credentials);
         return jsonResult({
           warning: VAULT_SECURITY_NOTE,
           include_values: Boolean(include_values),
+          host: host || null,
           count: safe.length,
           credentials: safe,
         });

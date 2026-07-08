@@ -49,6 +49,20 @@ func isPortAvailable(port string) bool {
 	return true
 }
 
+func requestHost(f *mitmproxy.Flow) string {
+	if f == nil || f.Request == nil {
+		return ""
+	}
+	host := f.Request.URL.Host
+	if host == "" {
+		host = f.Request.Header.Get("Host")
+	}
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		return h
+	}
+	return host
+}
+
 type ShadowSchemaAddon struct {
 	mitmproxy.BaseAddon
 	specManager *spec.SpecManager
@@ -63,14 +77,15 @@ func (a *ShadowSchemaAddon) Request(f *mitmproxy.Flow) {
 	// Delete Accept-Encoding to prevent compressed bodies from target server
 	f.Request.Header.Del("Accept-Encoding")
 
-	// Save credentials if present
+	host := requestHost(f)
+	// Save credentials if present (scoped to request host)
 	for _, h := range vaultAuthHeaders {
 		if val := f.Request.Header.Get(h); val != "" {
-			a.specManager.SaveVaultCredential(h, val)
+			a.specManager.SaveVaultCredential(h, val, host)
 		}
 	}
 	if cookie := f.Request.Header.Get("Cookie"); cookie != "" {
-		a.specManager.SaveVaultCredential("Cookie", cookie)
+		a.specManager.SaveVaultCredential("Cookie", cookie, host)
 	}
 
 	if strings.ToLower(f.Request.Header.Get("Upgrade")) == "websocket" {
@@ -90,10 +105,11 @@ func (a *ShadowSchemaAddon) Response(f *mitmproxy.Flow) {
 		return
 	}
 
+	host := requestHost(f)
 	// Capture Set-Cookie from responses into the vault (auth establishment).
 	for _, c := range f.Response.Header.Values("Set-Cookie") {
 		if c != "" {
-			a.specManager.SaveVaultCredential("Set-Cookie", c)
+			a.specManager.SaveVaultCredential("Set-Cookie", c, host)
 		}
 	}
 

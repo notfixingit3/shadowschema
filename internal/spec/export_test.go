@@ -7,8 +7,8 @@ import (
 
 func TestBuildExportDocumentOmitsVaultSecretsByDefault(t *testing.T) {
 	sm := newTestSpecManager(t, "example.com")
-	sm.SaveVaultCredential("Authorization", "Bearer test-token")
-	sm.SaveVaultCredential("X-Api-Key", "secret-key")
+	sm.SaveVaultCredential("Authorization", "Bearer test-token", "example.com")
+	sm.SaveVaultCredential("X-Api-Key", "secret-key", "example.com")
 
 	data, err := sm.buildExportDocument()
 
@@ -37,7 +37,7 @@ func TestBuildExportDocumentOmitsVaultSecretsByDefault(t *testing.T) {
 
 func TestBuildExportDocumentIncludesSecretsWhenRequested(t *testing.T) {
 	sm := newTestSpecManager(t, "example.com")
-	sm.SaveVaultCredential("Authorization", "Bearer test-token")
+	sm.SaveVaultCredential("Authorization", "Bearer test-token", "example.com")
 
 	sm.mu.Lock()
 	data, err := sm.buildExportDocumentFrom(sm.doc, sm.SessionID, true)

@@ -14,11 +14,14 @@ export default defineConfig(({ mode }) => {
       '/vault': 'http://127.0.0.1:38081',
       '/discovered': 'http://127.0.0.1:38081',
       '/generate-sdk': 'http://127.0.0.1:38081',
+      '/import-har': 'http://127.0.0.1:38081',
+      '/validate-spec': 'http://127.0.0.1:38081',
       '/sessions': 'http://127.0.0.1:38081',
       '/sessions/add-target': 'http://127.0.0.1:38081',
       '/sessions/switch': 'http://127.0.0.1:38081',
       '/sessions/delete': 'http://127.0.0.1:38081',
       '/sessions/rename': 'http://127.0.0.1:38081',
+      '/sessions/diff': 'http://127.0.0.1:38081',
     },
   };
 

@@ -71,7 +71,9 @@ func (s *SpecManager) mountReplayRoute(mux *http.ServeMux) {
 			return
 		}
 
-		credentials, _ := s.listVaultCredentialsForSession(view.SessionID)
+		// Prefer credentials for the primary target host.
+		host := primaryTargetHost(view.Target)
+		credentials, _ := s.listVaultCredentialsForSession(view.SessionID, host)
 		script := buildPythonReplayScript(req.Path, strings.ToUpper(req.Method), operation, view.Target, credentials)
 
 		w.Header().Set("Content-Type", "text/x-python; charset=utf-8")

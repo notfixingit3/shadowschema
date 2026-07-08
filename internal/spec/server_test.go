@@ -15,7 +15,7 @@ import (
 
 func TestExportMapEndpointOmitsVaultSecretsByDefault(t *testing.T) {
 	sm := newTestSpecManager(t, "example.com")
-	sm.SaveVaultCredential("Authorization", "Bearer test-token")
+	sm.SaveVaultCredential("Authorization", "Bearer test-token", "example.com")
 
 	server := httptest.NewServer(sm.ExportHandler())
 	defer server.Close()
@@ -63,7 +63,7 @@ func TestExportMapEndpointOmitsVaultSecretsByDefault(t *testing.T) {
 func TestVaultEndpointReturnsCredentials(t *testing.T) {
 	sm := newTestSpecManager(t, "example.com")
 	token := "secret-key-" + t.Name()
-	sm.SaveVaultCredential("X-Api-Key", token)
+	sm.SaveVaultCredential("X-Api-Key", token, "example.com")
 
 	server := httptest.NewServer(sm.ExportHandler())
 	defer server.Close()

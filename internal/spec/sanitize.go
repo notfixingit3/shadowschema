@@ -65,6 +65,7 @@ func redactCredentials(credentials []AuthCredential) []AuthCredential {
 	for i, c := range credentials {
 		out[i] = AuthCredential{
 			HeaderName: c.HeaderName,
+			Host:       c.Host,
 			TokenValue: "",
 			FirstSeen:  c.FirstSeen,
 		}

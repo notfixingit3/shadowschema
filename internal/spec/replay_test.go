@@ -14,7 +14,7 @@ func TestExportReplayEndpointReturnsPythonScript(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer test-token")
 	// response body vs request body must stay distinct for replay
 	sm.AddEndpoint(req, "/api/items", 201, []byte(`{"id":42,"created":true}`), []byte(`{"name":"widget"}`))
-	sm.SaveVaultCredential("Authorization", "Bearer test-token")
+	sm.SaveVaultCredential("Authorization", "Bearer test-token", "example.com")
 
 	server := httptest.NewServer(sm.ExportHandler())
 	defer server.Close()

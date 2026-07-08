@@ -67,7 +67,7 @@ func TestSanitizeDocForExportStripsSecrets(t *testing.T) {
 	sm := newTestSpecManager(t, "example.com")
 	req, _ := http.NewRequest(http.MethodPost, "http://example.com/api/items", nil)
 	sm.AddEndpoint(req, "/api/items", 200, []byte(`{"secret":"x"}`), []byte(`{"password":"y"}`))
-	sm.SaveVaultCredential("Authorization", "Bearer secret")
+	sm.SaveVaultCredential("Authorization", "Bearer secret", "example.com")
 
 	sm.mu.Lock()
 	sdkDoc, _, err := specForSDK(sm.doc)

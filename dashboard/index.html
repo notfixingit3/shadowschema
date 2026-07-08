@@ -155,6 +155,7 @@
                 <div class="section-header" style="justify-content: flex-start; gap: 1.5rem;">
                   <h3 id="tab-schema" class="tab-btn active">JSON Schema</h3>
                   <h3 id="tab-raw" class="tab-btn">Last Raw Payload</h3>
+                  <h3 id="tab-graphql" class="tab-btn hidden">GraphQL</h3>
                   <span class="badge" style="margin-left: auto;">Application/JSON</span>
                 </div>
                 <div class="code-window">
@@ -165,6 +166,7 @@
                   </div>
                   <pre id="endpoint-response"></pre>
                   <pre id="endpoint-raw" class="hidden"></pre>
+                  <div id="endpoint-graphql" class="hidden gql-pane"></div>
                 </div>
               </div>
             </div>
@@ -179,7 +181,7 @@
             <a href="https://github.com/notfixingit3/shadowschema" target="_blank" rel="noopener" class="footer-link">GitHub</a>
             <a href="https://github.com/notfixingit3/shadowschema/issues" target="_blank" rel="noopener" class="footer-link">Report Issue</a>
             <a href="https://github.com/sponsors/notfixingit3" target="_blank" rel="noopener" class="footer-link sponsor-link">💖 Sponsor</a>
-            <span class="footer-version">v1.1.3-beta.8</span>
+            <span class="footer-version">v1.1.3-beta.9+</span>
           </div>
         </div>
       </footer>
@@ -196,6 +198,7 @@
           <table style="width: 100%; text-align: left; border-collapse: collapse;">
             <thead>
               <tr style="border-bottom: 1px solid var(--glass-border);">
+                <th style="padding: 0.5rem; color: var(--text-muted);">Host</th>
                 <th style="padding: 0.5rem; color: var(--text-muted);">Header</th>
                 <th style="padding: 0.5rem; color: var(--text-muted);">Token Value</th>
                 <th style="padding: 0.5rem; color: var(--text-muted);">First Seen</th>

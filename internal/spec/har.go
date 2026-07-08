@@ -133,7 +133,7 @@ func (s *SpecManager) importHAREntry(entry harEntry, onlyMatchingTarget bool, re
 		canonical := http.CanonicalHeaderKey(name)
 		if isVaultAuthHeader(canonical) || canonical == "Cookie" {
 			if strings.TrimSpace(h.Value) != "" {
-				s.SaveVaultCredential(canonical, h.Value)
+				s.SaveVaultCredential(canonical, h.Value, host)
 			}
 		}
 	}
@@ -154,7 +154,7 @@ func (s *SpecManager) importHAREntry(entry harEntry, onlyMatchingTarget bool, re
 	responseBody := decodeHARContent(entry.Response.Content)
 	for _, h := range entry.Response.Headers {
 		if strings.EqualFold(h.Name, "Set-Cookie") && strings.TrimSpace(h.Value) != "" {
-			s.SaveVaultCredential("Set-Cookie", h.Value)
+			s.SaveVaultCredential("Set-Cookie", h.Value, host)
 		}
 	}
 

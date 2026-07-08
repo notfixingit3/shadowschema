@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **Multi-arch Docker images:** CI publishes `linux/amd64` + `linux/arm64` for proxy and dashboard (QEMU + Buildx).
+- **Host-scoped Auth Vault:** Credentials stored per request host; `/vault?host=` and MCP `host` filter; replay prefers target host tokens.
+- **Dashboard GraphQL panel:** Expandable operations tab with variables + last response.
+- **Dashboard modules:** Split render helpers into `dashboard/modules/` (`highlight`, `graphql`, `websocket`, `vault`).
 - **Vault redaction modes:** `/vault` redacts token values by default; `?include_values=1` returns secrets. MCP `shadowschema_get_vault` defaults to redacted (`include_values: false`).
 - **Secret-safe SDK generation:** `specForSDK` strips vault payloads, last samples, WebSocket frames, and GraphQL op payloads before OpenAPI Generator runs.
 - **Multi-sample observation:** Per-operation `x-hit-count`, `x-status-histogram`, `x-payload-samples` (last 5), `x-param-stats`.
@@ -14,7 +18,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - **MCP:** Version `0.4.1` — 20 tools.
-- **Dashboard:** Vault and replay fetch `/vault?include_values=1`.
+- **Dashboard:** Vault UI shows host column; replay uses host-filtered vault.
 
 ## [1.1.3-beta.9] - 2026-07-08
 

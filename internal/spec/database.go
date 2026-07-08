@@ -105,8 +105,9 @@ func initPostgresSchema(db *sql.DB) error {
 			session_id INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
 			header_name TEXT NOT NULL,
 			token_value TEXT NOT NULL,
+			host TEXT NOT NULL DEFAULT '',
 			first_seen TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			UNIQUE(session_id, header_name, token_value)
+			UNIQUE(session_id, host, header_name, token_value)
 		)`,
 		`CREATE TABLE IF NOT EXISTS discovered_domains (
 			session_id INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
@@ -119,6 +120,9 @@ func initPostgresSchema(db *sql.DB) error {
 		if _, err := db.Exec(stmt); err != nil {
 			return fmt.Errorf("postgres schema: %w", err)
 		}
+	}
+	if err := migrateAuthVaultHostPostgres(db); err != nil {
+		return err
 	}
 	return nil
 }
@@ -142,11 +146,16 @@ func initSQLiteSchema(db *sql.DB) error {
 		session_id INTEGER,
 		header_name TEXT,
 		token_value TEXT,
+		host TEXT DEFAULT '',
 		first_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
-		UNIQUE(session_id, header_name, token_value)
+		UNIQUE(session_id, host, header_name, token_value)
 	)`)
 	if err != nil {
 		return fmt.Errorf("sqlite auth_vault table: %w", err)
+	}
+
+	if err := migrateAuthVaultHostSQLite(db); err != nil {
+		return err
 	}
 
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS discovered_domains (
@@ -159,6 +168,86 @@ func initSQLiteSchema(db *sql.DB) error {
 		return fmt.Errorf("sqlite discovered_domains table: %w", err)
 	}
 	return nil
+}
+
+func migrateAuthVaultHostPostgres(db *sql.DB) error {
+	// Best-effort upgrade for pre-host-scoped vault tables.
+	_, _ = db.Exec(`ALTER TABLE auth_vault ADD COLUMN IF NOT EXISTS host TEXT NOT NULL DEFAULT ''`)
+	// Recreate unique constraint to include host (ignore failures if already correct).
+	_, _ = db.Exec(`ALTER TABLE auth_vault DROP CONSTRAINT IF EXISTS auth_vault_session_id_header_name_token_value_key`)
+	_, _ = db.Exec(`ALTER TABLE auth_vault DROP CONSTRAINT IF EXISTS auth_vault_session_id_host_header_name_token_value_key`)
+	_, err := db.Exec(`
+		DO $$ BEGIN
+			ALTER TABLE auth_vault
+			ADD CONSTRAINT auth_vault_session_host_header_token_key
+			UNIQUE (session_id, host, header_name, token_value);
+		EXCEPTION WHEN duplicate_table OR duplicate_object THEN NULL;
+		END $$;
+	`)
+	if err != nil {
+		// Non-fatal on older Postgres variants — UNIQUE may already exist via CREATE TABLE.
+		log.Printf("[WARN] auth_vault unique constraint migration: %v", err)
+	}
+	return nil
+}
+
+func migrateAuthVaultHostSQLite(db *sql.DB) error {
+	// Ensure host column exists on older DBs created without it.
+	var count int
+	err := db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('auth_vault') WHERE name = 'host'`).Scan(&count)
+	if err != nil {
+		// pragma_table_info may fail on very old SQLite — try ALTER and rebuild.
+		count = 0
+	}
+	if count == 0 {
+		_, _ = db.Exec(`ALTER TABLE auth_vault ADD COLUMN host TEXT DEFAULT ''`)
+	}
+
+	// Rebuild table if unique index still lacks host (detect via index list / recreate always safe with OR IGNORE copy).
+	var needsRebuild bool
+	rows, err := db.Query(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'auth_vault'`)
+	if err == nil {
+		defer rows.Close()
+		if rows.Next() {
+			var createSQL string
+			if err := rows.Scan(&createSQL); err == nil {
+				// Old unique without host: UNIQUE(session_id, header_name, token_value)
+				if strings.Contains(createSQL, "UNIQUE(session_id, header_name, token_value)") &&
+					!strings.Contains(createSQL, "UNIQUE(session_id, host, header_name, token_value)") {
+					needsRebuild = true
+				}
+			}
+		}
+	}
+	if !needsRebuild {
+		return nil
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		return fmt.Errorf("sqlite vault migrate begin: %w", err)
+	}
+	stmts := []string{
+		`CREATE TABLE auth_vault_new (
+			session_id INTEGER,
+			header_name TEXT,
+			token_value TEXT,
+			host TEXT DEFAULT '',
+			first_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(session_id, host, header_name, token_value)
+		)`,
+		`INSERT OR IGNORE INTO auth_vault_new (session_id, header_name, token_value, host, first_seen)
+			SELECT session_id, header_name, token_value, COALESCE(host, ''), first_seen FROM auth_vault`,
+		`DROP TABLE auth_vault`,
+		`ALTER TABLE auth_vault_new RENAME TO auth_vault`,
+	}
+	for _, stmt := range stmts {
+		if _, err := tx.Exec(stmt); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("sqlite vault migrate: %w", err)
+		}
+	}
+	return tx.Commit()
 }
 
 func rebindQuery(driver, query string) string {
@@ -213,18 +302,19 @@ func (s *SpecManager) insertSession(name, target, ignoreRules, specJSON string) 
 	return int(lastID), err
 }
 
-func (s *SpecManager) saveVaultCredential(headerName, tokenValue string) error {
+func (s *SpecManager) saveVaultCredential(headerName, tokenValue, host string) error {
+	host = normalizeHost(host)
 	if s.dbDriver == driverPostgres {
 		_, err := s.dbExec(
-			`INSERT INTO auth_vault (session_id, header_name, token_value) VALUES (?, ?, ?) ON CONFLICT DO NOTHING`,
-			s.SessionID, headerName, tokenValue,
+			`INSERT INTO auth_vault (session_id, header_name, token_value, host) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING`,
+			s.SessionID, headerName, tokenValue, host,
 		)
 		return err
 	}
 
 	_, err := s.dbExec(
-		`INSERT OR IGNORE INTO auth_vault (session_id, header_name, token_value) VALUES (?, ?, ?)`,
-		s.SessionID, headerName, tokenValue,
+		`INSERT OR IGNORE INTO auth_vault (session_id, header_name, token_value, host) VALUES (?, ?, ?, ?)`,
+		s.SessionID, headerName, tokenValue, host,
 	)
 	return err
 }

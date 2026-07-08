@@ -548,7 +548,7 @@ Include a **combined workflow** snippet in `agent-setup.md`:
 ### Auth & secrets
 
 - [x] **Vault redaction modes (MCP)** — `get_vault({ include_values: false })` default; REST `/vault` redacts unless `include_values=1`
-- [ ] **Scoped vault per host** — multi-target sessions currently mix credentials; key vault by host (+ path prefix optional)
+- [x] **Scoped vault per host** — credentials keyed by host; `/vault?host=` + MCP filter
 - [ ] **Cookie jar model** — parse Set-Cookie into named cookies; rebuild Cookie header for replay without dumping full jar into every export
 - [x] **Strip secrets from SDK zip** — `specForSDK` / `sanitizeDocForExport` strips vault + sample payloads
 - [ ] **Dashboard XSS hardening** — use `textContent` / `escapeHtml` for all path/param/summary fields injected into HTML
@@ -641,10 +641,11 @@ Include a **combined workflow** snippet in `agent-setup.md`:
 1. [x] **Vault redaction modes + strip secrets from SDK input** — `/vault?include_values=`, MCP default redact, `specForSDK` sanitizes samples/vault
 2. [x] **Multi-sample / required-param inference** — `x-hit-count`, `x-payload-samples`, `x-param-stats`, typed query params, required after consistent hits
 3. [x] **Session diff + OpenAPI validate MCP tools** — `GET /sessions/diff`, `GET /validate-spec`, MCP `session_diff` + `validate_spec`
-4. **Multi-arch Docker** — unblocks half the contributor base
+4. [x] **Multi-arch Docker** — CI publishes amd64 + arm64
 5. **npm publish MCP** — once soak tests pass on beta.9
-6. **Dashboard modularization + GraphQL ops panel** — UX for new features
+6. [x] **Dashboard modularization + GraphQL ops panel** — modules under `dashboard/modules/`, GraphQL tab
 7. **Stable v1.1.3** after soak
+- [x] **Scoped vault per host** — vault keyed by host; filter via `?host=`
 
 ---
 

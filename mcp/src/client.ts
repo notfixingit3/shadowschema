@@ -11,6 +11,7 @@ export interface SessionMeta {
 export interface AuthCredential {
   header_name: string;
   token_value: string;
+  host?: string;
   first_seen: string;
 }
 
@@ -118,12 +119,13 @@ export class ShadowSchemaClient {
     return response.json() as Promise<string[]>;
   }
 
-  async getVault(options: { includeValues?: boolean } = {}): Promise<AuthCredential[]> {
+  async getVault(options: { includeValues?: boolean; host?: string } = {}): Promise<AuthCredential[]> {
     // Default redacted — pass includeValues: true only when replaying / wiring auth.
     const includeValues = options.includeValues === true;
     const response = await this.request(
       this.withQuery("/vault", {
         include_values: includeValues ? "1" : "0",
+        host: options.host,
       }),
     );
     return response.json() as Promise<AuthCredential[]>;

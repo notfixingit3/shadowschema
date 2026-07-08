@@ -163,7 +163,7 @@ docker compose pull && docker compose up -d
 
 Copy `.env.example` to `.env` and uncomment the block that matches your workflow. Root `docker-compose.yml` defaults to `:beta` when no `.env` is present.
 
-**Apple Silicon / arm64:** GHCR images are currently `linux/amd64` only. On M-series Macs, build locally and run with `--pull never`:
+**Apple Silicon / arm64:** GHCR images are published as multi-arch (`linux/amd64` + `linux/arm64`) from CI. Pull with `docker compose pull` as usual. To build locally instead:
 
 ```bash
 docker build -t shadowschema:local .
@@ -450,7 +450,7 @@ The background export server on `:38081` powers the dashboard and CLI tooling:
 | `/endpoints/{path...}` | GET | Single endpoint detail (e.g. `/endpoints/api/v1/users`) |
 | `/export-map` | GET | Live OpenAPI spec (JSON or `?format=yaml`, `?path_prefix=`, `?session_id=`, `?include_secrets=1` for vault tokens) |
 | `/import-har` | POST | Import HAR 1.2 JSON (raw body or multipart `har`/`file`). Query: `only_matching_target` (default true) |
-| `/vault` | GET | Captured auth credentials. **Token values redacted by default**; pass `?include_values=1` for secrets (local UI/replay only) |
+| `/vault` | GET | Captured auth credentials (host-scoped). **Token values redacted by default**; `?include_values=1` for secrets; optional `?host=` filter |
 | `/sessions/diff` | GET, POST | Diff two sessions (`from` / `to` ids) — added/removed paths and method changes |
 | `/validate-spec` | GET, POST | Validate inferred OpenAPI (`?session_id=`); returns errors/warnings for agents |
 | `/discovered` | GET | Out-of-scope domains seen via CONNECT |

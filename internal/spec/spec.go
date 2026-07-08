@@ -46,6 +46,7 @@ type SessionMeta struct {
 type AuthCredential struct {
 	HeaderName string    `json:"header_name"`
 	TokenValue string    `json:"token_value"`
+	Host       string    `json:"host,omitempty"`
 	FirstSeen  time.Time `json:"first_seen"`
 }
 
@@ -120,10 +121,12 @@ func (s *SpecManager) GetTarget() string {
 	return s.TargetDomain
 }
 
-func (s *SpecManager) SaveVaultCredential(headerName, tokenValue string) {
+// SaveVaultCredential stores a captured auth header for the active session,
+// scoped to the request host (empty host = session-global / legacy).
+func (s *SpecManager) SaveVaultCredential(headerName, tokenValue, host string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	_ = s.saveVaultCredential(headerName, tokenValue)
+	_ = s.saveVaultCredential(headerName, tokenValue, normalizeHost(host))
 }
 
 func (s *SpecManager) IsTarget(host string) bool {
@@ -668,23 +671,12 @@ func (s *SpecManager) mountExportRoutes(mux *http.ServeMux) {
 			// Default: redact token values. Pass include_values=1 for full secrets
 			// (dashboard vault UI, local replay). Safer default if export API is exposed.
 			includeValues := parseIncludeSecrets(r.URL.Query().Get("include_values"))
+			hostFilter := strings.TrimSpace(r.URL.Query().Get("host"))
 
-			s.mu.Lock()
-			rows, err := s.dbQuery(`SELECT header_name, token_value, first_seen FROM auth_vault WHERE session_id = ? ORDER BY first_seen DESC`, s.SessionID)
-			s.mu.Unlock()
-
+			credentials, err := s.listVaultCredentialsForSession(s.SessionID, hostFilter)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
-			}
-			defer rows.Close()
-
-			var credentials []AuthCredential
-			for rows.Next() {
-				var ac AuthCredential
-				if err := rows.Scan(&ac.HeaderName, &ac.TokenValue, &ac.FirstSeen); err == nil {
-					credentials = append(credentials, ac)
-				}
 			}
 			if !includeValues {
 				credentials = redactCredentials(credentials)

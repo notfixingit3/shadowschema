@@ -1,5 +1,20 @@
 import './style.css';
 import { registerSW } from 'virtual:pwa-register';
+import { escapeHtml, syntaxHighlight } from './modules/highlight.js';
+import { isGraphQLOperation, renderGraphQLPanel } from './modules/graphql.js';
+import {
+  displayMethodFor,
+  isWebSocketOperation,
+  renderWebSocketFrameLog,
+  renderWebSocketSchemas,
+  renderWebSocketStats,
+} from './modules/websocket.js';
+import {
+  resolveVaultHeaders,
+  fetchVault,
+  renderVaultRows,
+  vaultErrorRow,
+} from './modules/vault.js';
 
 registerSW({ immediate: true });
 
@@ -130,20 +145,29 @@ const tabSchema = document.getElementById('tab-schema');
 const tabRaw = document.getElementById('tab-raw');
 
 
-// Tab logic
-tabSchema.addEventListener('click', () => {
-  tabSchema.classList.add('active');
-  tabRaw.classList.remove('active');
-  elResponse.classList.remove('hidden');
-  elRaw.classList.add('hidden');
-});
+const tabGraphql = document.getElementById('tab-graphql');
+const elGraphql = document.getElementById('endpoint-graphql');
 
-tabRaw.addEventListener('click', () => {
-  tabRaw.classList.add('active');
-  tabSchema.classList.remove('active');
-  elRaw.classList.remove('hidden');
-  elResponse.classList.add('hidden');
-});
+function activateDetailTab(which) {
+  const tabs = [tabSchema, tabRaw, tabGraphql].filter(Boolean);
+  const panes = [
+    { el: elResponse, key: 'schema' },
+    { el: elRaw, key: 'raw' },
+    { el: elGraphql, key: 'graphql' },
+  ];
+  tabs.forEach((t) => t.classList.toggle('active', t && t.id === `tab-${which === 'schema' ? 'schema' : which === 'raw' ? 'raw' : 'graphql'}`));
+  if (tabSchema) tabSchema.classList.toggle('active', which === 'schema');
+  if (tabRaw) tabRaw.classList.toggle('active', which === 'raw');
+  if (tabGraphql) tabGraphql.classList.toggle('active', which === 'graphql');
+  panes.forEach(({ el, key }) => {
+    if (!el) return;
+    el.classList.toggle('hidden', key !== which);
+  });
+}
+
+if (tabSchema) tabSchema.addEventListener('click', () => activateDetailTab('schema'));
+if (tabRaw) tabRaw.addEventListener('click', () => activateDetailTab('raw'));
+if (tabGraphql) tabGraphql.addEventListener('click', () => activateDetailTab('graphql'));
 
 // Search + method filter logic
 let methodFilter = 'all';
@@ -166,61 +190,15 @@ if (methodFilters) {
 
 // Vault logic
 if (vaultBtn && vaultModal && vaultClose && vaultList) {
-  vaultBtn.addEventListener('click', () => {
+  vaultBtn.addEventListener('click', async () => {
     vaultModal.classList.remove('hidden');
-    vaultList.innerHTML = '<tr><td colspan="4" style="text-align:center; padding: 1rem;">Loading...</td></tr>';
-    
-    fetch(`${API_URL}/vault?include_values=1`)
-      .then(res => res.json())
-      .then(creds => {
-        vaultList.innerHTML = '';
-        if (!creds || creds.length === 0) {
-          vaultList.innerHTML = '<tr><td colspan="4" style="text-align:center; padding: 1rem;">No credentials captured yet.</td></tr>';
-          return;
-        }
-        creds.forEach(c => {
-          const tr = document.createElement('tr');
-          tr.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
-
-          const headerCell = document.createElement('td');
-          headerCell.style.padding = '0.75rem 0.5rem';
-          headerCell.style.fontFamily = 'var(--font-mono)';
-          headerCell.style.color = 'var(--accent-cyan)';
-          headerCell.textContent = c.header_name;
-
-          const valueCell = document.createElement('td');
-          valueCell.style.padding = '0.75rem 0.5rem';
-          valueCell.style.fontFamily = 'var(--font-mono)';
-          valueCell.style.wordBreak = 'break-all';
-          valueCell.textContent = c.token_value;
-
-          const seenCell = document.createElement('td');
-          seenCell.style.padding = '0.75rem 0.5rem';
-          seenCell.style.fontSize = '0.85rem';
-          seenCell.style.color = 'var(--text-muted)';
-          seenCell.textContent = new Date(c.first_seen).toLocaleString();
-
-          const actionCell = document.createElement('td');
-          actionCell.style.padding = '0.75rem 0.5rem';
-          const copyBtn = document.createElement('button');
-          copyBtn.className = 'glass-btn small';
-          copyBtn.textContent = 'Copy';
-          copyBtn.addEventListener('click', () => {
-            navigator.clipboard.writeText(c.token_value).then(() => {
-              const original = copyBtn.textContent;
-              copyBtn.textContent = '✓';
-              setTimeout(() => { copyBtn.textContent = original; }, 1500);
-            });
-          });
-          actionCell.appendChild(copyBtn);
-
-          tr.append(headerCell, valueCell, seenCell, actionCell);
-          vaultList.appendChild(tr);
-        });
-      })
-      .catch(err => {
-        vaultList.innerHTML = `<tr><td colspan="4" style="text-align:center; padding: 1rem; color: red;">Error: ${err}</td></tr>`;
-      });
+    vaultList.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 1rem;">Loading...</td></tr>';
+    try {
+      const creds = await fetchVault(API_URL, { includeValues: true });
+      renderVaultRows(vaultList, creds);
+    } catch (err) {
+      vaultErrorRow(vaultList, err);
+    }
   });
 
   vaultClose.addEventListener('click', () => {
@@ -235,15 +213,6 @@ let currentSessionId = null;
 let currentSessionName = null;
 
 const HTTP_METHODS = new Set(['get', 'post', 'put', 'delete', 'patch', 'head', 'options', 'trace', 'connect']);
-
-function isWebSocketOperation(method, operation) {
-  if (operation && operation['x-websocket'] === true) return true;
-  return method.toLowerCase() === 'trace';
-}
-
-function displayMethodFor(method, operation) {
-  return isWebSocketOperation(method, operation) ? 'WS' : method.toUpperCase();
-}
 
 function matchesMethodFilter(method, operation) {
   if (methodFilter === 'all') return true;
@@ -267,146 +236,6 @@ function downloadBlob(blob, filename) {
   anchor.download = filename;
   anchor.click();
   window.URL.revokeObjectURL(url);
-}
-
-function renderWebSocketStats(stats) {
-  if (!stats) {
-    return '<div class="ws-stats-empty">No frames intercepted yet.</div>';
-  }
-
-  const items = [
-    ['Total', stats.total || 0],
-    ['Data', stats.data || 0],
-    ['Control', stats.control || 0],
-    ['Inbound', stats.in || 0],
-    ['Outbound', stats.out || 0],
-    ['Fragmented', stats.fragmented || 0],
-  ];
-
-  return `
-    <div class="ws-stats-grid">
-      ${items.map(([label, value]) => `
-        <div class="ws-stat-item">
-          <span class="ws-stat-label">${label}</span>
-          <span class="ws-stat-value">${value}</span>
-        </div>
-      `).join('')}
-    </div>
-  `;
-}
-
-function formatWebSocketPayload(payload) {
-  if (payload == null) return '<span class="ws-payload-empty">(empty)</span>';
-  if (typeof payload === 'string') return `<code>${payload}</code>`;
-  if (payload.close_code !== undefined) {
-    const reason = payload.close_reason ? ` — ${payload.close_reason}` : '';
-    return `<code>close ${payload.close_code}${reason}</code>`;
-  }
-  if (payload.encoding === 'base64') {
-    return `<code>[binary ${payload.size || 0} bytes]</code>`;
-  }
-  return `<code>${JSON.stringify(payload)}</code>`;
-}
-
-function renderWebSocketSchemas(operation) {
-  const inbound = operation['x-websocket-message-schema-in'];
-  const outbound = operation['x-websocket-message-schema-out'];
-  const legacy = operation['x-websocket-message-schema'];
-
-  const blocks = [];
-
-  if (outbound) {
-    blocks.push(`
-      <div style="margin-top: 1.25rem;">
-        <div style="color: #60a5fa; font-size: 0.85rem; margin-bottom: 0.5rem;">Outbound Messages (client → server)</div>
-        ${syntaxHighlight(outbound)}
-      </div>
-    `);
-  }
-
-  if (inbound) {
-    blocks.push(`
-      <div style="margin-top: 1.25rem;">
-        <div style="color: #34d399; font-size: 0.85rem; margin-bottom: 0.5rem;">Inbound Messages (server → client)</div>
-        ${syntaxHighlight(inbound)}
-      </div>
-    `);
-  }
-
-  if (blocks.length === 0 && legacy) {
-    blocks.push(`
-      <div style="margin-top: 1.25rem;">
-        <div style="color: #38bdf8; font-size: 0.85rem; margin-bottom: 0.5rem;">Inferred Message Schema</div>
-        ${syntaxHighlight(legacy)}
-      </div>
-    `);
-  }
-
-  if (blocks.length === 0) {
-    return `<div style="color: #64748b; margin-top: 1rem; font-size: 0.9rem;">Directional message schemas will appear here as client and server frames are intercepted.</div>`;
-  }
-
-  return blocks.join('');
-}
-
-function vaultHeadersFromSpec(spec) {
-  const headers = {};
-  const vault = spec?.['x-shadowschema-vault'];
-  if (!Array.isArray(vault)) return headers;
-
-  vault.forEach(c => {
-    if (c.header_name && c.token_value) {
-      headers[c.header_name] = c.token_value;
-    }
-  });
-  return headers;
-}
-
-async function resolveVaultHeaders(spec) {
-  let headers = vaultHeadersFromSpec(spec);
-  if (Object.keys(headers).length > 0) {
-    return headers;
-  }
-
-  try {
-    const res = await fetch(`${API_URL}/vault?include_values=1`);
-    if (!res.ok) return headers;
-    const creds = await res.json();
-    creds.forEach(c => {
-      if (c.header_name && c.token_value) {
-        headers[c.header_name] = c.token_value;
-      }
-    });
-  } catch (err) {
-    console.error('Failed to fetch vault credentials', err);
-  }
-  return headers;
-}
-
-function renderWebSocketFrameLog(frames) {
-  if (!frames || frames.length === 0) {
-    return '<div class="ws-frame-empty">Waiting for intercepted WebSocket frames...</div>';
-  }
-
-  const rows = [...frames].reverse().map(frame => {
-    const direction = frame.direction === 'in' ? 'IN' : 'OUT';
-    const directionClass = frame.direction === 'in' ? 'ws-dir-in' : 'ws-dir-out';
-    const frag = frame.fragmented ? `<span class="ws-frag-badge">${frame.fragments} frags</span>` : '';
-    const time = frame.captured_at ? new Date(frame.captured_at).toLocaleTimeString() : '';
-    return `
-      <div class="ws-frame-row">
-        <div class="ws-frame-meta">
-          <span class="ws-dir-badge ${directionClass}">${direction}</span>
-          <span class="ws-opcode-badge">${(frame.opcode_name || 'unknown').toUpperCase()}</span>
-          ${frag}
-          <span class="ws-frame-time">${time}</span>
-        </div>
-        <div class="ws-frame-payload">${formatWebSocketPayload(frame.payload)}</div>
-      </div>
-    `;
-  }).join('');
-
-  return `<div class="ws-frame-log">${rows}</div>`;
 }
 
 async function fetchSessions() {
@@ -548,30 +377,6 @@ function renderSidebar() {
   statEndpoints.textContent = count;
 }
 
-function syntaxHighlight(json) {
-  if (typeof json != 'string') {
-    json = JSON.stringify(json, undefined, 2);
-  }
-  json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
-    let color = '#a5b4fc'; // default
-    if (/^"/.test(match)) {
-      if (/:$/.test(match)) {
-        color = '#38bdf8'; // keys
-      } else {
-        color = '#a78bfa'; // strings
-      }
-    } else if (/true|false/.test(match)) {
-      color = '#34d399'; // booleans
-    } else if (/null/.test(match)) {
-      color = '#f87171'; // null
-    } else {
-      color = '#fbbf24'; // numbers
-    }
-    return '<span style="color:' + color + '">' + match + '</span>';
-  });
-}
-
 function resetDetailScroll() {
   if (detailPanel) {
     detailPanel.scrollTop = 0;
@@ -634,32 +439,36 @@ function renderDetails(path, method) {
     `;
 
     elRaw.innerHTML = renderWebSocketFrameLog(operation['x-websocket-frames']);
+    if (tabGraphql) tabGraphql.classList.add('hidden');
+    if (elGraphql) elGraphql.innerHTML = '';
+    activateDetailTab('schema');
     return;
   }
 
   if (tabSchema) tabSchema.textContent = 'JSON Schema';
   if (tabRaw) tabRaw.textContent = 'Last Raw Payload';
 
-  const isGQL = operation['x-graphql'] === true;
-  let gqlBlock = '';
-  if (isGQL && operation['x-graphql-operations']) {
-    const names = Object.keys(operation['x-graphql-operations']);
-    gqlBlock = `<div style="margin-bottom: 1rem; padding: 0.75rem; border: 1px solid rgba(244, 114, 182, 0.35); border-radius: 8px;">
-      <div style="color: #f472b6; font-weight: 600; margin-bottom: 0.5rem;">GraphQL operations (${names.length})</div>
-      <div style="font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-muted);">${names.map((n) => escapeHtml(n)).join(', ')}</div>
-    </div>`;
+  const isGQL = isGraphQLOperation(operation);
+  if (tabGraphql) {
+    tabGraphql.classList.toggle('hidden', !isGQL);
+    tabGraphql.textContent = isGQL ? 'GraphQL' : 'GraphQL';
   }
-  
+  if (elGraphql) {
+    elGraphql.innerHTML = isGQL ? renderGraphQLPanel(operation) : '';
+  }
+  // Prefer schema tab; if GraphQL-only view was active and no longer GQL, reset.
+  if (!isGQL && tabGraphql && tabGraphql.classList.contains('active')) {
+    activateDetailTab('schema');
+  }
+
   const statusKeys = operation.responses ? Object.keys(operation.responses).sort() : [];
   const preferredStatus = statusKeys.includes('200') ? '200' : statusKeys[0];
   const response = preferredStatus && operation.responses[preferredStatus];
   if (response && response.content && response.content['application/json']) {
     const schema = response.content['application/json'].schema;
-    elResponse.innerHTML = gqlBlock + (statusKeys.length > 1
+    elResponse.innerHTML = (statusKeys.length > 1
       ? `<div style="color: #38bdf8; font-size: 0.8rem; margin-bottom: 0.5rem;">Statuses: ${statusKeys.map(escapeHtml).join(', ')} (showing ${escapeHtml(preferredStatus)})</div>`
       : '') + syntaxHighlight(schema);
-  } else if (gqlBlock) {
-    elResponse.innerHTML = gqlBlock + '<span style="color: #64748b;">// No JSON response schema yet.</span>';
   } else {
     elResponse.innerHTML = '<span style="color: #64748b;">// No JSON response payload intercepted yet.</span>';
   }
@@ -670,21 +479,10 @@ function renderDetails(path, method) {
       raw = `<div style="color: #38bdf8; font-size: 0.8rem; margin-bottom: 0.35rem;">Request body</div>${syntaxHighlight(operation['x-last-request-body'])}
              <div style="color: #38bdf8; font-size: 0.8rem; margin: 1rem 0 0.35rem;">Response body</div>${raw}`;
     }
-    if (isGQL && operation['x-graphql-operations']) {
-      raw += `<div style="color: #f472b6; font-size: 0.8rem; margin: 1rem 0 0.35rem;">GraphQL ops</div>${syntaxHighlight(operation['x-graphql-operations'])}`;
-    }
     elRaw.innerHTML = raw;
   } else {
     elRaw.innerHTML = '<span style="color: #64748b;">// No raw payload captured.</span>';
   }
-}
-
-function escapeHtml(s) {
-  return String(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
 }
 
 // Export logic
@@ -763,7 +561,10 @@ if (copyPythonBtn) {
     }
 
     const url = baseUrl + selectedPath;
-    const vaultHeaders = await resolveVaultHeaders(currentSpec);
+    const preferredHost = (currentSpec.servers && currentSpec.servers[0] && currentSpec.servers[0].url)
+      ? currentSpec.servers[0].url.replace(/^https?:\/\//, '').split('/')[0]
+      : undefined;
+    const vaultHeaders = await resolveVaultHeaders(API_URL, currentSpec, preferredHost);
     const headers = {
       "User-Agent": "ShadowSchema-Replay/1.0",
       ...vaultHeaders,

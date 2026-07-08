@@ -945,3 +945,108 @@ pre {
   gap: 1rem;
   margin-top: 1rem;
 }
+
+/* GraphQL operations panel */
+.gql-pane {
+  padding: 1rem;
+  max-height: 28rem;
+  overflow: auto;
+}
+
+.gql-panel-header {
+  color: #f472b6;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+  font-size: 0.95rem;
+}
+
+.gql-panel-empty {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  padding: 0.5rem 0;
+}
+
+.gql-op-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.gql-op-card {
+  border: 1px solid rgba(244, 114, 182, 0.25);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.25);
+  padding: 0.5rem 0.75rem;
+}
+
+.gql-op-card summary {
+  cursor: pointer;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  list-style: none;
+}
+
+.gql-op-card summary::-webkit-details-marker {
+  display: none;
+}
+
+.gql-op-type {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  background: rgba(244, 114, 182, 0.2);
+  color: #f472b6;
+  font-weight: 600;
+}
+
+.gql-op-type.badge-mutation {
+  background: rgba(251, 191, 36, 0.2);
+  color: #fbbf24;
+}
+
+.gql-op-type.badge-subscription {
+  background: rgba(56, 189, 248, 0.2);
+  color: #38bdf8;
+}
+
+.gql-op-name {
+  font-family: var(--font-mono);
+  color: var(--text-main);
+  font-size: 0.9rem;
+}
+
+.gql-op-fields {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.gql-op-seen {
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.gql-op-body {
+  margin-top: 0.75rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.gql-block {
+  margin-bottom: 0.75rem;
+}
+
+.gql-block-label {
+  color: #38bdf8;
+  font-size: 0.8rem;
+  margin-bottom: 0.35rem;
+}
+
+.tab-btn.hidden {
+  display: none;
+}
